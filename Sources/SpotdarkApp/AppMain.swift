@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import SwiftUI
 import SpotdarkCore
 
@@ -52,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settingsStore = SettingsStore.shared
 
     private var activeHotKey: HotKey?
+    private var statusItem: NSStatusItem?
+    private var accessibilityCheckTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -61,11 +64,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsStore.applyLauncherHotKey = { [weak self] hotKey in
             self?.replaceLauncherHotKey(with: hotKey) ?? .failure(.monitorRegistrationFailed)
         }
+        setupStatusBarItem()
         registerHotKey()
-        setupMenuBar()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        accessibilityCheckTimer?.invalidate()
+        accessibilityCheckTimer = nil
         settingsStore.applyLauncherHotKey = nil
         hotKeyManager.unregisterAll()
     }
@@ -74,6 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try registerLauncherHotKey(settingsStore.launcherHotKey)
             activeHotKey = settingsStore.launcherHotKey
+            accessibilityCheckTimer?.invalidate()
+            accessibilityCheckTimer = nil
+        } catch HotKeyError.accessibilityPermissionRequired {
+            startAccessibilityPolling()
         } catch let error as HotKeyError {
             LauncherCoordinator.shared.showErrorFeedback(.hotKeyError(error))
         } catch {
@@ -81,20 +90,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func setupMenuBar() {
-        let mainMenu = NSMenu()
-        let appMenuItem = NSMenuItem()
-        mainMenu.addItem(appMenuItem)
+    private func startAccessibilityPolling() {
+        guard accessibilityCheckTimer == nil else { return }
+        accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard AXIsProcessTrusted() else { return }
+            Task { @MainActor [weak self] in
+                self?.registerHotKey()
+            }
+        }
+    }
 
-        let appMenu = NSMenu()
-        appMenuItem.submenu = appMenu
+    private func setupStatusBarItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem?.button?.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Spotdark")
 
-        appMenu.addItem(NSMenuItem(title: SettingsStrings.showLauncherMenuItemTitle, action: #selector(showLauncherFromMenu), keyEquivalent: "l"))
-        appMenu.addItem(NSMenuItem(title: SettingsStrings.settingsMenuItemTitle, action: #selector(showSettingsFromMenu), keyEquivalent: ","))
-        appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: SettingsStrings.quitMenuItemTitle, action: #selector(quit), keyEquivalent: "q"))
-
-        NSApp.mainMenu = mainMenu
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: SettingsStrings.showLauncherMenuItemTitle, action: #selector(showLauncherFromMenu), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: SettingsStrings.settingsMenuItemTitle, action: #selector(showSettingsFromMenu), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: SettingsStrings.quitMenuItemTitle, action: #selector(quit), keyEquivalent: ""))
+        statusItem?.menu = menu
     }
 
     private func registerLauncherHotKey(_ hotKey: HotKey) throws {
