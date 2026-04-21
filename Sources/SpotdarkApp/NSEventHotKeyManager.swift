@@ -25,9 +25,12 @@ final class NSEventHotKeyManager: HotKeyRegistering {
         let targetModifiers = hotKey.modifiers
         let expectedNSFlags = NSEvent.ModifierFlags(rawValue: targetModifiers.rawValue)
 
+        // Only compare primary modifier keys (cmd/ctrl/opt/shift) so that CapsLock,
+        // numericPad, function, and other device-independent flags don't block the match.
+        let primaryModifierMask: NSEvent.ModifierFlags = [.shift, .control, .option, .command]
         let monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             guard event.keyCode == targetKeyCode else { return }
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let flags = event.modifierFlags.intersection(primaryModifierMask)
             guard flags == expectedNSFlags else { return }
             handler()
         }
