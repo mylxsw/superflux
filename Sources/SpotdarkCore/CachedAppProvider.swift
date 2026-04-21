@@ -9,9 +9,9 @@ public final class CachedAppProvider: AppProviding {
         self.base = base
     }
 
-    public func fetchApplications() throws -> [AppItem] {
+    public func fetchApplications() async throws -> [AppItem] {
         if let cached { return cached }
-        let apps = try base.fetchApplications()
+        let apps = try await base.fetchApplications()
         cached = apps
         return apps
     }

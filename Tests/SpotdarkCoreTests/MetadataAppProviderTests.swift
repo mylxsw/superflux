@@ -2,7 +2,7 @@ import XCTest
 @testable import SpotdarkCore
 
 final class MetadataAppProviderTests: XCTestCase {
-    func testMetadataAppProviderBuildsItemsFromURLs() throws {
+    func testMetadataAppProviderBuildsItemsFromURLs() async throws {
         let fake = FakeMetadataQuery(urls: [
             URL(fileURLWithPath: "/Applications/Safari.app"),
             URL(fileURLWithPath: "/System/Applications/Mail.app"),
@@ -10,23 +10,23 @@ final class MetadataAppProviderTests: XCTestCase {
         ])
 
         let provider = MetadataAppProvider(query: fake)
-        let apps = try provider.fetchApplications()
+        let apps = try await provider.fetchApplications()
 
         XCTAssertEqual(Set(apps.map { $0.name }), Set(["Safari", "Mail"]))
     }
 
-    func testMetadataAppProviderDeduplicatesDuplicateURLs() throws {
+    func testMetadataAppProviderDeduplicatesDuplicateURLs() async throws {
         let url = URL(fileURLWithPath: "/Applications/Duplicate.app")
         let fake = FakeMetadataQuery(urls: [url, url])
 
         let provider = MetadataAppProvider(query: fake)
-        let apps = try provider.fetchApplications()
+        let apps = try await provider.fetchApplications()
 
         XCTAssertEqual(apps.count, 1)
         XCTAssertEqual(apps.first?.name, "Duplicate")
     }
 
-    func testMetadataAppProviderReturnsSortedResults() throws {
+    func testMetadataAppProviderReturnsSortedResults() async throws {
         let fake = FakeMetadataQuery(urls: [
             URL(fileURLWithPath: "/Applications/Zoom.app"),
             URL(fileURLWithPath: "/Applications/Arc.app"),
@@ -34,19 +34,19 @@ final class MetadataAppProviderTests: XCTestCase {
         ])
 
         let provider = MetadataAppProvider(query: fake)
-        let apps = try provider.fetchApplications()
+        let apps = try await provider.fetchApplications()
 
         XCTAssertEqual(apps.map { $0.name }, ["Arc", "Mail", "Zoom"])
     }
 
-    func testMetadataAppProviderReturnsEmptyForNoApps() throws {
+    func testMetadataAppProviderReturnsEmptyForNoApps() async throws {
         let provider = MetadataAppProvider(query: FakeMetadataQuery(urls: []))
-        let apps = try provider.fetchApplications()
+        let apps = try await provider.fetchApplications()
         XCTAssertTrue(apps.isEmpty)
     }
 
     private struct FakeMetadataQuery: MetadataQuerying {
         let urls: [URL]
-        func fetchApplicationBundleURLs() throws -> [URL] { urls }
+        func fetchApplicationBundleURLs() async throws -> [URL] { urls }
     }
 }

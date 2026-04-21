@@ -2,7 +2,7 @@ import Foundation
 
 /// Provides installed applications.
 public protocol AppProviding {
-    func fetchApplications() throws -> [AppItem]
+    func fetchApplications() async throws -> [AppItem]
 }
 
 /// Default app provider: scans common application folders.

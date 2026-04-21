@@ -2,53 +2,53 @@ import XCTest
 @testable import SpotdarkCore
 
 final class CachedAppProviderTests: XCTestCase {
-    func testFirstCallFetchesFromBase() throws {
+    func testFirstCallFetchesFromBase() async throws {
         let base = SpyAppProvider(apps: [
             AppItem(name: "Xcode", bundleIdentifier: "com.apple.dt.Xcode",
                     bundleURL: URL(fileURLWithPath: "/Applications/Xcode.app"))
         ])
         let cached = CachedAppProvider(base: base)
 
-        let result = try cached.fetchApplications()
+        let result = try await cached.fetchApplications()
 
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(base.fetchCount, 1)
     }
 
-    func testSubsequentCallsReturnCachedResultWithoutCallingBase() throws {
+    func testSubsequentCallsReturnCachedResultWithoutCallingBase() async throws {
         let base = SpyAppProvider(apps: [
             AppItem(name: "Xcode", bundleIdentifier: nil,
                     bundleURL: URL(fileURLWithPath: "/Applications/Xcode.app"))
         ])
         let cached = CachedAppProvider(base: base)
 
-        _ = try cached.fetchApplications()
-        _ = try cached.fetchApplications()
-        _ = try cached.fetchApplications()
+        _ = try await cached.fetchApplications()
+        _ = try await cached.fetchApplications()
+        _ = try await cached.fetchApplications()
 
         XCTAssertEqual(base.fetchCount, 1)
     }
 
-    func testInvalidateForcesRefetchOnNextCall() throws {
+    func testInvalidateForcesRefetchOnNextCall() async throws {
         let base = SpyAppProvider(apps: [
             AppItem(name: "TextEdit", bundleIdentifier: nil,
                     bundleURL: URL(fileURLWithPath: "/Applications/TextEdit.app"))
         ])
         let cached = CachedAppProvider(base: base)
 
-        _ = try cached.fetchApplications()
+        _ = try await cached.fetchApplications()
         cached.invalidate()
-        _ = try cached.fetchApplications()
+        _ = try await cached.fetchApplications()
 
         XCTAssertEqual(base.fetchCount, 2)
     }
 
-    func testInvalidateWithoutPriorFetchDoesNotCrash() throws {
+    func testInvalidateWithoutPriorFetchDoesNotCrash() async throws {
         let base = SpyAppProvider(apps: [])
         let cached = CachedAppProvider(base: base)
 
         cached.invalidate()
-        let result = try cached.fetchApplications()
+        let result = try await cached.fetchApplications()
 
         XCTAssertEqual(result.count, 0)
         XCTAssertEqual(base.fetchCount, 1)
