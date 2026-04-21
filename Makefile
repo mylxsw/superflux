@@ -1,4 +1,10 @@
 run:
 	swift run SpotdarkApp
 
-.PHONY: run
+test:
+	swift test
+
+coverage:
+	swift test --enable-code-coverage
+
+.PHONY: run test coverage
