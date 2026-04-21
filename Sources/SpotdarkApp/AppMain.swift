@@ -8,9 +8,11 @@ final class LauncherCoordinator {
     static let shared = LauncherCoordinator()
 
     private let panelController: LauncherPanelController
+    private let errorFeedbackController: ErrorFeedbackPanelController
 
     private init() {
         panelController = LauncherPanelController()
+        errorFeedbackController = ErrorFeedbackPanelController()
     }
 
     func toggle() {
@@ -28,14 +30,31 @@ final class LauncherCoordinator {
     func hide() {
         panelController.hide()
     }
+
+    func showErrorFeedback(_ content: ErrorFeedbackContent) {
+        errorFeedbackController.present(content)
+    }
+
+    func showSettings(pane: SettingsPane? = nil) {
+        if let pane {
+            SettingsStore.shared.selectedPane = pane
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
 }
 
 /// Application delegate for hotkey registration and menu bar.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hotKeyManager: HotKeyRegistering = CarbonHotKeyManager()
+    private let hotKeyManager: HotKeyRegistering = NSEventHotKeyManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        hotKeyManager.onError = { error in
+            LauncherCoordinator.shared.showErrorFeedback(.hotKeyError(error))
+        }
         registerHotKey()
         setupMenuBar()
     }
@@ -45,24 +64,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func registerHotKey() {
+        // Default to Option+Space to avoid conflicting with Spotlight (Cmd+Space).
+        // NSEvent monitors are passive — they cannot take exclusive ownership of a key combo,
+        // so defaulting to a non-conflicting binding is the right approach.
         do {
-            try hotKeyManager.register(hotKey: .commandSpace) {
-                Task { @MainActor in
-                    LauncherCoordinator.shared.toggle()
-                }
-            }
+            try registerLauncherHotKey(.optionSpace)
+        } catch let error as HotKeyError {
+            LauncherCoordinator.shared.showErrorFeedback(.hotKeyError(error))
         } catch {
-            showHotKeyRegistrationFailedAlert()
-
-            do {
-                try hotKeyManager.register(hotKey: .optionSpace) {
-                    Task { @MainActor in
-                        LauncherCoordinator.shared.toggle()
-                    }
-                }
-            } catch {
-                // If both registrations fail, the user can still open the launcher from the menu.
-            }
+            LauncherCoordinator.shared.showErrorFeedback(.shortcutMonitorError)
         }
     }
 
@@ -74,25 +84,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
 
-        appMenu.addItem(NSMenuItem(title: "Show Launcher", action: #selector(showLauncherFromMenu), keyEquivalent: "l"))
+        appMenu.addItem(NSMenuItem(title: SettingsStrings.showLauncherMenuItemTitle, action: #selector(showLauncherFromMenu), keyEquivalent: "l"))
+        appMenu.addItem(NSMenuItem(title: SettingsStrings.settingsMenuItemTitle, action: #selector(showSettingsFromMenu), keyEquivalent: ","))
         appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: SettingsStrings.quitMenuItemTitle, action: #selector(quit), keyEquivalent: "q"))
 
         NSApp.mainMenu = mainMenu
     }
 
-    private func showHotKeyRegistrationFailedAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Cannot register Command+Space"
-        alert.informativeText = "Command+Space is likely reserved by Spotlight. Disable Spotlight's shortcut in System Settings to use it here. Falling back to Option+Space."
-        alert.addButton(withTitle: "OK")
-        alert.alertStyle = .warning
-        alert.runModal()
+    private func registerLauncherHotKey(_ hotKey: HotKey) throws {
+        try hotKeyManager.register(hotKey: hotKey) {
+            Task { @MainActor in
+                LauncherCoordinator.shared.toggle()
+            }
+        }
     }
 
     @objc private func showLauncherFromMenu() {
         Task { @MainActor in
             LauncherCoordinator.shared.show()
+        }
+    }
+
+    @objc private func showSettingsFromMenu() {
+        Task { @MainActor in
+            LauncherCoordinator.shared.showSettings()
         }
     }
 
@@ -108,7 +124,7 @@ struct SpotdarkApp: App {
     var body: some Scene {
         // No default windows; this behaves like a menu bar accessory.
         Settings {
-            EmptyView()
+            SettingsView(store: SettingsStore.shared)
         }
     }
 }

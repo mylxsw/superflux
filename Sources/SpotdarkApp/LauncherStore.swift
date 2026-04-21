@@ -148,9 +148,7 @@ final class LauncherStore {
     private func handle(command: CommandItem) {
         switch command.id {
         case "open-settings":
-            if let url = URL(string: "x-apple.systempreferences:") {
-                NSWorkspace.shared.open(url)
-            }
+            LauncherCoordinator.shared.showSettings()
         case "quit":
             NSApp.terminate(nil)
         default:

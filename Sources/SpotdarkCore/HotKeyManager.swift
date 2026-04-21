@@ -1,143 +1,72 @@
 import Foundation
 
-#if canImport(Carbon)
-import Carbon
-#endif
+/// Platform-neutral modifier flags whose raw values match NSEvent.ModifierFlags.
+public struct HotKeyModifierFlags: OptionSet, Sendable, Hashable {
+    public let rawValue: UInt
 
-/// Represents a hotkey combination.
-public struct HotKey: Equatable {
-    public let keyCode: UInt32
-    public let modifiers: UInt32
+    public init(rawValue: UInt) { self.rawValue = rawValue }
 
-    public init(keyCode: UInt32, modifiers: UInt32) {
+    public static let shift   = HotKeyModifierFlags(rawValue: 1 << 17)  // 131072
+    public static let control = HotKeyModifierFlags(rawValue: 1 << 18)  // 262144
+    public static let option  = HotKeyModifierFlags(rawValue: 1 << 19)  // 524288
+    public static let command = HotKeyModifierFlags(rawValue: 1 << 20)  // 1048576
+}
+
+/// A hotkey combination defined by a virtual key code and modifier flags.
+public struct HotKey: Equatable, Sendable {
+    /// Virtual key code (same codes used by Carbon kVK_* and NSEvent.keyCode).
+    public let keyCode: UInt16
+    public let modifiers: HotKeyModifierFlags
+
+    public init(keyCode: UInt16, modifiers: HotKeyModifierFlags) {
         self.keyCode = keyCode
         self.modifiers = modifiers
     }
 
-    /// Convenience for Option(Alt) + Space.
-    public static let optionSpace = HotKey(
-        keyCode: 49, // kVK_Space
-        modifiers: HotKeyModifier.option
-    )
+    /// Option(Alt) + Space.
+    public static let optionSpace  = HotKey(keyCode: 49, modifiers: .option)
 
-    /// Convenience for Command + Space.
-    public static let commandSpace = HotKey(
-        keyCode: 49, // kVK_Space
-        modifiers: HotKeyModifier.command
-    )
+    /// Command + Space (likely reserved by Spotlight).
+    public static let commandSpace = HotKey(keyCode: 49, modifiers: .command)
+
+    /// Human-readable display string, e.g. "⌘Space".
+    public var displayString: String {
+        var parts: [String] = []
+        if modifiers.contains(.control) { parts.append("⌃") }
+        if modifiers.contains(.option)  { parts.append("⌥") }
+        if modifiers.contains(.shift)   { parts.append("⇧") }
+        if modifiers.contains(.command) { parts.append("⌘") }
+        parts.append(keyCodeDisplayString)
+        return parts.joined()
+    }
+
+    private var keyCodeDisplayString: String {
+        switch keyCode {
+        case 49: return "Space"
+        default: return "Key(\(keyCode))"
+        }
+    }
 }
 
-/// Carbon modifier flags for RegisterEventHotKey.
-public enum HotKeyModifier {
-    public static let command: UInt32 = UInt32(cmdKey)
-    public static let option: UInt32 = UInt32(optionKey)
-    public static let control: UInt32 = UInt32(controlKey)
-    public static let shift: UInt32 = UInt32(shiftKey)
-}
-
-/// Abstraction for registering hotkeys.
-public protocol HotKeyRegistering {
-    func register(hotKey: HotKey, handler: @escaping () -> Void) throws
-    func unregisterAll()
-}
-
-/// Errors from hotkey registration.
+/// Errors from hotkey registration or monitoring.
 public enum HotKeyError: Error, Equatable {
-    case carbonUnavailable
-    case registrationFailed(OSStatus)
+    /// Accessibility permissions are required for global event monitoring.
+    case accessibilityPermissionRequired
+    /// The system rejected the monitor registration (rare; monitor returned nil).
+    case monitorRegistrationFailed
 }
 
-/// A minimal Carbon-based global hotkey manager.
+/// Abstraction for registering global hotkeys.
 ///
-/// Notes:
-/// - This uses RegisterEventHotKey, which is the classic approach.
-/// - Command+Space is likely reserved by macOS; register may fail.
-public final class CarbonHotKeyManager: HotKeyRegistering {
-    private var hotKeyRefs: [EventHotKeyRef?] = []
-    private var handlers: [UInt32: () -> Void] = [:]
-    private var nextId: UInt32 = 1
+/// `register` may throw synchronously (e.g. permission denied at call time).
+/// Post-registration errors (e.g. permission revoked) arrive via `onError`.
+public protocol HotKeyRegistering: AnyObject {
+    /// Called on the main thread when an async error occurs after registration.
+    var onError: ((HotKeyError) -> Void)? { get set }
 
-    public init() {}
+    /// Register a global hotkey. Throws `HotKeyError` if immediate setup fails.
+    func register(hotKey: HotKey, handler: @escaping @Sendable () -> Void) throws
 
-    public func register(hotKey: HotKey, handler: @escaping () -> Void) throws {
-        #if canImport(Carbon)
-        let id = nextId
-        nextId += 1
-        let hotKeyID = EventHotKeyID(signature: OSType(0x52415943), id: id) // 'RAYC'
-
-        var ref: EventHotKeyRef?
-        let status = RegisterEventHotKey(
-            hotKey.keyCode,
-            hotKey.modifiers,
-            hotKeyID,
-            GetEventDispatcherTarget(),
-            0,
-            &ref
-        )
-
-        guard status == noErr else {
-            throw HotKeyError.registrationFailed(status)
-        }
-
-        hotKeyRefs.append(ref)
-        handlers[id] = handler
-        installHandlerIfNeeded()
-        #else
-        throw HotKeyError.carbonUnavailable
-        #endif
-    }
-
-    public func unregisterAll() {
-        #if canImport(Carbon)
-        for ref in hotKeyRefs {
-            if let ref {
-                UnregisterEventHotKey(ref)
-            }
-        }
-        hotKeyRefs.removeAll()
-        handlers.removeAll()
-        #endif
-    }
-
-    #if canImport(Carbon)
-    private var isEventHandlerInstalled = false
-
-    private func installHandlerIfNeeded() {
-        guard !isEventHandlerInstalled else { return }
-        isEventHandlerInstalled = true
-
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-
-        // We intentionally capture `self` weakly to avoid leaks.
-        let status = InstallEventHandler(
-            GetEventDispatcherTarget(),
-            { (nextHandler, event, userData) -> OSStatus in
-                guard let userData else { return noErr }
-                let manager = Unmanaged<CarbonHotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-                var hotKeyID = EventHotKeyID()
-                GetEventParameter(
-                    event,
-                    EventParamName(kEventParamDirectObject),
-                    EventParamType(typeEventHotKeyID),
-                    nil,
-                    MemoryLayout<EventHotKeyID>.size,
-                    nil,
-                    &hotKeyID
-                )
-                let id = hotKeyID.id
-                manager.handlers[id]?()
-                return noErr
-            },
-            1,
-            &eventType,
-            Unmanaged.passUnretained(self).toOpaque(),
-            nil
-        )
-
-        if status != noErr {
-            // Best-effort: do not throw here because it happens after successful registration.
-            // In production you should surface this error.
-        }
-    }
-    #endif
+    /// Remove all registered hotkeys and monitors.
+    func unregisterAll()
 }
