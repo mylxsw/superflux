@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 import SpotdarkCore
 
+private let savedPanelOriginKey = "settings.savedPanelFrame"
+
 /// A borderless panel that can become key/main to accept text input.
 final class LauncherPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -10,7 +12,7 @@ final class LauncherPanel: NSPanel {
 
 /// Hosts the SwiftUI launcher view inside an NSPanel.
 @MainActor
-final class LauncherPanelController {
+final class LauncherPanelController: NSObject {
     private let panel: LauncherPanel
     private let store: LauncherStore
 
@@ -18,7 +20,7 @@ final class LauncherPanelController {
         panel.isVisible
     }
 
-    init() {
+    override init() {
         let commandRegistry = CommandRegistry(commands: [
             CommandItem(id: "open-settings", title: "Open Settings", keywords: ["settings", "preferences"]),
             CommandItem(id: "quit", title: "Quit", keywords: ["exit", "close"])
@@ -59,11 +61,18 @@ final class LauncherPanelController {
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
 
+        super.init()
+
+        panel.delegate = self
         centerOnScreen()
     }
 
     func showCenteredAndFocus() {
-        centerOnScreen()
+        if SettingsStore.shared.remembersPanelPosition, let savedOrigin = restoredPanelOrigin() {
+            panel.setFrameOrigin(savedOrigin)
+        } else {
+            centerOnScreen()
+        }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         store.requestFocus()
@@ -79,7 +88,29 @@ final class LauncherPanelController {
         panel.setFrameOrigin(origin)
     }
 
+    private func restoredPanelOrigin() -> NSPoint? {
+        guard let data = UserDefaults.standard.dictionary(forKey: savedPanelOriginKey),
+              let x = data["x"] as? Double,
+              let y = data["y"] as? Double else {
+            return nil
+        }
+        return NSPoint(x: x, y: y)
+    }
+
     func hide() {
         panel.orderOut(nil)
+    }
+}
+
+extension LauncherPanelController: NSWindowDelegate {
+    nonisolated func windowDidMove(_ notification: Notification) {
+        Task { @MainActor in
+            guard SettingsStore.shared.remembersPanelPosition else { return }
+            let origin = panel.frame.origin
+            UserDefaults.standard.set(
+                ["x": origin.x, "y": origin.y],
+                forKey: savedPanelOriginKey
+            )
+        }
     }
 }

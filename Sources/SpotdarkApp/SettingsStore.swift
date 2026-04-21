@@ -1,4 +1,5 @@
 import Foundation
+import ServiceManagement
 import SpotdarkCore
 
 @MainActor
@@ -24,15 +25,42 @@ final class SettingsStore: ObservableObject {
         static let hotKeyCode = "settings.launcherHotKey.keyCode"
         static let hotKeyModifiers = "settings.launcherHotKey.modifiers"
         static let customSearchLocations = "settings.search.customLocations"
+        static let selectedAppearance = "settings.appearance"
+        static let showsMenuBarItem = "settings.showsMenuBarItem"
+        static let remembersPanelPosition = "settings.remembersPanelPosition"
     }
 
     nonisolated static let searchLocationsDidChangeNotification = Notification.Name("SettingsStore.searchLocationsDidChange")
 
     @Published var selectedPane: SettingsPane
-    @Published var launchAtLoginEnabled: Bool
-    @Published var showsMenuBarItem: Bool
-    @Published var selectedAppearance: SettingsAppearance
-    @Published var remembersPanelPosition: Bool
+    @Published var launchAtLoginEnabled: Bool {
+        didSet {
+            do {
+                if launchAtLoginEnabled {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {}
+        }
+    }
+    @Published var showsMenuBarItem: Bool {
+        didSet {
+            defaults?.set(showsMenuBarItem, forKey: DefaultsKey.showsMenuBarItem)
+            applyShowsMenuBarItem?(showsMenuBarItem)
+        }
+    }
+    @Published var selectedAppearance: SettingsAppearance {
+        didSet {
+            defaults?.set(selectedAppearance.rawValue, forKey: DefaultsKey.selectedAppearance)
+            applyAppearance?(selectedAppearance)
+        }
+    }
+    @Published var remembersPanelPosition: Bool {
+        didSet {
+            defaults?.set(remembersPanelPosition, forKey: DefaultsKey.remembersPanelPosition)
+        }
+    }
     @Published private(set) var launcherHotKey: HotKey
     @Published private(set) var isRecordingShortcut: Bool
     @Published private(set) var shortcutFeedback: ShortcutFeedback?
@@ -41,6 +69,8 @@ final class SettingsStore: ObservableObject {
     @Published var selectedCustomSearchLocation: String?
 
     var applyLauncherHotKey: HotKeyApplyAction?
+    var applyAppearance: (@MainActor (SettingsAppearance) -> Void)?
+    var applyShowsMenuBarItem: (@MainActor (Bool) -> Void)?
 
     private let defaults: UserDefaults?
 
@@ -61,10 +91,18 @@ final class SettingsStore: ObservableObject {
     ) {
         self.defaults = defaults
         self.selectedPane = selectedPane
+        self.showsMenuBarItem = defaults.flatMap { d -> Bool? in
+            guard d.object(forKey: DefaultsKey.showsMenuBarItem) != nil else { return nil }
+            return d.bool(forKey: DefaultsKey.showsMenuBarItem)
+        } ?? showsMenuBarItem
+        self.selectedAppearance = defaults
+            .flatMap { $0.string(forKey: DefaultsKey.selectedAppearance) }
+            .flatMap { SettingsAppearance(rawValue: $0) } ?? selectedAppearance
+        self.remembersPanelPosition = defaults.flatMap { d -> Bool? in
+            guard d.object(forKey: DefaultsKey.remembersPanelPosition) != nil else { return nil }
+            return d.bool(forKey: DefaultsKey.remembersPanelPosition)
+        } ?? remembersPanelPosition
         self.launchAtLoginEnabled = launchAtLoginEnabled
-        self.showsMenuBarItem = showsMenuBarItem
-        self.selectedAppearance = selectedAppearance
-        self.remembersPanelPosition = remembersPanelPosition
         self.launcherHotKey = Self.normalizedShortcut(
             defaults.flatMap(Self.restoreLauncherHotKey(from:)) ?? launcherHotKey ?? Self.defaultLauncherHotKey
         )
@@ -125,6 +163,10 @@ final class SettingsStore: ObservableObject {
         }
 
         return index < customSearchLocations.count - 1
+    }
+
+    func syncLaunchAtLoginFromOS() {
+        launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
     }
 
     func beginShortcutRecording() {
@@ -201,6 +243,8 @@ final class SettingsStore: ObservableObject {
     func moveSelectedCustomSearchLocationDown() {
         moveSelectedCustomSearchLocation(by: 1)
     }
+
+    // MARK: - Private
 
     private func applyShortcut(_ hotKey: HotKey, successMessage: String) {
         switch applyLauncherHotKey?(hotKey) ?? .success(()) {

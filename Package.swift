@@ -17,7 +17,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "SpotdarkApp",
-            dependencies: ["SpotdarkCore"]
+            dependencies: ["SpotdarkCore"],
+            linkerSettings: [.linkedFramework("ServiceManagement")]
         ),
         .testTarget(
             name: "SpotdarkCoreTests",

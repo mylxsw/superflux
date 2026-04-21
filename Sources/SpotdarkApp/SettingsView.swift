@@ -50,22 +50,18 @@ private struct GeneralSettingsPane: View {
                         Text(appearance.title).tag(appearance)
                     }
                 }
-                .disabled(true)
 
                 SettingsSecondaryText(SettingsStrings.appearanceHelp)
             }
 
             Section(SettingsStrings.panelSectionTitle) {
                 Toggle(SettingsStrings.launchAtLoginTitle, isOn: $store.launchAtLoginEnabled)
-                    .disabled(true)
                 SettingsSecondaryText(SettingsStrings.launchAtLoginHelp)
 
                 Toggle(SettingsStrings.menuBarTitle, isOn: $store.showsMenuBarItem)
-                    .disabled(true)
                 SettingsSecondaryText(SettingsStrings.menuBarHelp)
 
                 Toggle(SettingsStrings.panelPositionTitle, isOn: $store.remembersPanelPosition)
-                    .disabled(true)
                 SettingsSecondaryText(SettingsStrings.panelPositionHelp)
             }
         }

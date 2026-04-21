@@ -61,7 +61,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsStore.applyLauncherHotKey = { [weak self] hotKey in
             self?.replaceLauncherHotKey(with: hotKey) ?? .failure(.monitorRegistrationFailed)
         }
+        settingsStore.applyAppearance = { [weak self] appearance in
+            self?.applyAppearance(appearance)
+        }
+        settingsStore.applyShowsMenuBarItem = { [weak self] visible in
+            self?.statusItem?.isVisible = visible
+        }
+        applyAppearance(settingsStore.selectedAppearance)
+        settingsStore.syncLaunchAtLoginFromOS()
         setupStatusBarItem()
+        statusItem?.isVisible = settingsStore.showsMenuBarItem
         registerHotKey()
     }
 
@@ -69,7 +78,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         accessibilityCheckTimer?.invalidate()
         accessibilityCheckTimer = nil
         settingsStore.applyLauncherHotKey = nil
+        settingsStore.applyAppearance = nil
+        settingsStore.applyShowsMenuBarItem = nil
         hotKeyManager.unregisterAll()
+    }
+
+    private func applyAppearance(_ appearance: SettingsAppearance) {
+        switch appearance {
+        case .followSystem:
+            NSApp.appearance = nil
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
     }
 
     private func registerHotKey() {
