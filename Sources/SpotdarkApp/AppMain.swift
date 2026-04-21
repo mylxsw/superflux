@@ -112,7 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startAccessibilityPolling() {
         guard accessibilityCheckTimer == nil else { return }
         accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            guard AXIsProcessTrusted() else { return }
+            // Accept either Accessibility or Input Monitoring — whichever the user granted.
+            guard AXIsProcessTrusted() || CGPreflightListenEventAccess() else { return }
             Task { @MainActor [weak self] in
                 self?.registerHotKey()
             }

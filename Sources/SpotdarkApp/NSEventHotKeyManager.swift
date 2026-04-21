@@ -14,8 +14,14 @@ final class NSEventHotKeyManager: HotKeyRegistering {
     private var registeredHotKeys: [(HotKey, @Sendable () -> Void)] = []
 
     func register(hotKey: HotKey, handler: @escaping @Sendable () -> Void) throws {
-        if !AXIsProcessTrusted() {
-            // Prompt the system accessibility dialog.
+        // On macOS 10.15+, NSEvent global key monitors require Input Monitoring permission.
+        // Accessibility also satisfies the requirement on all macOS versions.
+        // Accept either so the user only needs to grant whichever prompt the system shows.
+        guard AXIsProcessTrusted() || CGPreflightListenEventAccess() else {
+            // Request Input Monitoring first (macOS 10.15+ — the permission the system
+            // will prompt for when a key logger is detected).  Then also request Accessibility
+            // so older systems and users who prefer that path are covered.
+            CGRequestListenEventAccess()
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
             AXIsProcessTrustedWithOptions(opts as CFDictionary)
             throw HotKeyError.accessibilityPermissionRequired
