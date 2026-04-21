@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyManager: HotKeyRegistering = CarbonHotKeyManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
         registerHotKey()
         setupMenuBar()
     }

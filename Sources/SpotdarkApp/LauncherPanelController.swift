@@ -55,24 +55,25 @@ final class LauncherPanelController {
         // Make SwiftUI background transparent; SwiftUI draws its own material.
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
+
+        centerOnScreen()
     }
 
     func showCenteredAndFocus() {
-        if let screen = NSScreen.main {
-            let frame = screen.visibleFrame
-            let origin = NSPoint(
-                x: frame.midX - panel.frame.width / 2,
-                y: frame.midY - panel.frame.height / 2
-            )
-            panel.setFrameOrigin(origin)
-        }
-
-        NSApp.setActivationPolicy(.accessory)
+        centerOnScreen()
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
-
-        // Ensure the search field becomes focused.
         store.requestFocus()
+    }
+
+    private func centerOnScreen() {
+        guard let screen = NSScreen.main else { return }
+        let frame = screen.visibleFrame
+        let origin = NSPoint(
+            x: frame.midX - panel.frame.width / 2,
+            y: frame.midY - panel.frame.height / 2
+        )
+        panel.setFrameOrigin(origin)
     }
 
     func hide() {
