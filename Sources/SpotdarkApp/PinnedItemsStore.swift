@@ -33,6 +33,11 @@ final class PinnedItemsStore {
         return pinnedIDs.contains(id)
     }
 
+    func setPinnedIDs(_ ids: Set<String>) {
+        pinnedIDs = ids
+        persist()
+    }
+
     private func persist() {
         defaults.set(Array(pinnedIDs), forKey: key)
     }

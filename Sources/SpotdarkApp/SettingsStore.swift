@@ -26,8 +26,10 @@ final class SettingsStore: ObservableObject {
         static let hotKeyModifiers = "settings.launcherHotKey.modifiers"
         static let customSearchLocations = "settings.search.customLocations"
         static let selectedAppearance = "settings.appearance"
+        static let selectedThemePreset = "settings.themePreset"
         static let showsMenuBarItem = "settings.showsMenuBarItem"
         static let remembersPanelPosition = "settings.remembersPanelPosition"
+        static let selectedWebSearchEngine = "settings.search.webSearchEngine"
     }
 
     nonisolated static let searchLocationsDidChangeNotification = Notification.Name("SettingsStore.searchLocationsDidChange")
@@ -56,6 +58,11 @@ final class SettingsStore: ObservableObject {
             applyAppearance?(selectedAppearance)
         }
     }
+    @Published var selectedThemePreset: LauncherThemePreset {
+        didSet {
+            defaults?.set(selectedThemePreset.rawValue, forKey: DefaultsKey.selectedThemePreset)
+        }
+    }
     @Published var remembersPanelPosition: Bool {
         didSet {
             defaults?.set(remembersPanelPosition, forKey: DefaultsKey.remembersPanelPosition)
@@ -67,6 +74,11 @@ final class SettingsStore: ObservableObject {
     @Published private(set) var defaultSearchLocations: [String]
     @Published private(set) var customSearchLocations: [String]
     @Published var selectedCustomSearchLocation: String?
+    @Published var selectedWebSearchEngine: WebSearchEngine {
+        didSet {
+            defaults?.set(selectedWebSearchEngine.rawValue, forKey: DefaultsKey.selectedWebSearchEngine)
+        }
+    }
 
     var applyLauncherHotKey: HotKeyApplyAction?
     var applyAppearance: (@MainActor (SettingsAppearance) -> Void)?
@@ -79,6 +91,7 @@ final class SettingsStore: ObservableObject {
         launchAtLoginEnabled: Bool = false,
         showsMenuBarItem: Bool = true,
         selectedAppearance: SettingsAppearance = .followSystem,
+        selectedThemePreset: LauncherThemePreset = .ocean,
         remembersPanelPosition: Bool = false,
         launcherHotKey: HotKey? = nil,
         isRecordingShortcut: Bool = false,
@@ -86,6 +99,7 @@ final class SettingsStore: ObservableObject {
         defaultSearchLocations: [String]? = nil,
         customSearchLocations: [String]? = nil,
         selectedCustomSearchLocation: String? = nil,
+        selectedWebSearchEngine: WebSearchEngine? = nil,
         defaults: UserDefaults? = .standard,
         applyLauncherHotKey: HotKeyApplyAction? = nil
     ) {
@@ -98,6 +112,9 @@ final class SettingsStore: ObservableObject {
         self.selectedAppearance = defaults
             .flatMap { $0.string(forKey: DefaultsKey.selectedAppearance) }
             .flatMap { SettingsAppearance(rawValue: $0) } ?? selectedAppearance
+        self.selectedThemePreset = defaults
+            .flatMap { $0.string(forKey: DefaultsKey.selectedThemePreset) }
+            .flatMap { LauncherThemePreset(rawValue: $0) } ?? selectedThemePreset
         self.remembersPanelPosition = defaults.flatMap { d -> Bool? in
             guard d.object(forKey: DefaultsKey.remembersPanelPosition) != nil else { return nil }
             return d.bool(forKey: DefaultsKey.remembersPanelPosition)
@@ -116,6 +133,9 @@ final class SettingsStore: ObservableObject {
             customSearchLocations ?? restoredCustomLocations,
             defaultPaths: resolvedDefaultSearchLocations
         )
+        self.selectedWebSearchEngine = selectedWebSearchEngine ??
+            defaults.flatMap { $0.string(forKey: DefaultsKey.selectedWebSearchEngine) }
+                .flatMap { WebSearchEngine(rawValue: $0) } ?? .google
         self.selectedCustomSearchLocation = selectedCustomSearchLocation.flatMap { candidate in
             let normalized = Self.normalizedPath(candidate)
             return self.customSearchLocations.contains(normalized) ? normalized : nil
@@ -373,10 +393,158 @@ final class SettingsStore: ObservableObject {
         URL(fileURLWithPath: normalizedPath(path), isDirectory: true)
     }
 
+    // MARK: - Export / Import
+
+    func exportPayload(pinnedIDs: Set<String>) -> SettingsExportPayload {
+        SettingsExportPayload(
+            version: SettingsExportPayload.currentVersion,
+            exportedAt: Date(),
+            hotKeyCode: Int(launcherHotKey.keyCode),
+            hotKeyModifiers: Int(launcherHotKey.modifiers.rawValue),
+            appearance: selectedAppearance.rawValue,
+            themePreset: selectedThemePreset.rawValue,
+            showsMenuBarItem: showsMenuBarItem,
+            remembersPanelPosition: remembersPanelPosition,
+            webSearchEngine: selectedWebSearchEngine.rawValue,
+            customSearchLocations: customSearchLocations,
+            pinnedItemIDs: Array(pinnedIDs).sorted()
+        )
+    }
+
+    func importPreview(_ payload: SettingsExportPayload, currentPinnedIDs: Set<String>) -> SettingsImportPreview {
+        var conflicts: [SettingsImportConflict] = []
+
+        let importedHotKey = restoredHotKey(from: payload)
+        if importedHotKey != launcherHotKey {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictHotkey,
+                currentValue: launcherHotKey.displayString,
+                importedValue: importedHotKey.displayString
+            ))
+        }
+
+        if let importedAppearance = SettingsAppearance(rawValue: payload.appearance),
+           importedAppearance != selectedAppearance {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictAppearance,
+                currentValue: selectedAppearance.title,
+                importedValue: importedAppearance.title
+            ))
+        }
+
+        if let importedTheme = LauncherThemePreset(rawValue: payload.themePreset),
+           importedTheme != selectedThemePreset {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictTheme,
+                currentValue: selectedThemePreset.title,
+                importedValue: importedTheme.title
+            ))
+        }
+
+        if payload.showsMenuBarItem != showsMenuBarItem {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictMenuBar,
+                currentValue: showsMenuBarItem ? SettingsStrings.importValueOn : SettingsStrings.importValueOff,
+                importedValue: payload.showsMenuBarItem ? SettingsStrings.importValueOn : SettingsStrings.importValueOff
+            ))
+        }
+
+        if payload.remembersPanelPosition != remembersPanelPosition {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictPanelPosition,
+                currentValue: remembersPanelPosition ? SettingsStrings.importValueOn : SettingsStrings.importValueOff,
+                importedValue: payload.remembersPanelPosition ? SettingsStrings.importValueOn : SettingsStrings.importValueOff
+            ))
+        }
+
+        if let importedEngine = WebSearchEngine(rawValue: payload.webSearchEngine),
+           importedEngine != selectedWebSearchEngine {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictWebSearch,
+                currentValue: selectedWebSearchEngine.displayName,
+                importedValue: importedEngine.displayName
+            ))
+        }
+
+        if Set(payload.customSearchLocations) != Set(customSearchLocations) {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictSearchLocations,
+                currentValue: String(format: SettingsStrings.importConflictFolderCountTemplate, customSearchLocations.count),
+                importedValue: String(format: SettingsStrings.importConflictFolderCountTemplate, payload.customSearchLocations.count)
+            ))
+        }
+
+        if Set(payload.pinnedItemIDs) != currentPinnedIDs {
+            conflicts.append(SettingsImportConflict(
+                settingName: SettingsStrings.importConflictPinnedItems,
+                currentValue: String(format: SettingsStrings.importConflictItemCountTemplate, currentPinnedIDs.count),
+                importedValue: String(format: SettingsStrings.importConflictItemCountTemplate, payload.pinnedItemIDs.count)
+            ))
+        }
+
+        return SettingsImportPreview(conflicts: conflicts, payload: payload)
+    }
+
+    /// Applies the imported payload and returns the new set of pinned IDs to persist.
+    @discardableResult
+    func applyImport(_ payload: SettingsExportPayload, strategy: SettingsImportStrategy, currentPinnedIDs: Set<String>) -> Set<String> {
+        switch strategy {
+        case .replaceAll:
+            if let appearance = SettingsAppearance(rawValue: payload.appearance) {
+                selectedAppearance = appearance
+            }
+            if let theme = LauncherThemePreset(rawValue: payload.themePreset) {
+                selectedThemePreset = theme
+            }
+            showsMenuBarItem = payload.showsMenuBarItem
+            remembersPanelPosition = payload.remembersPanelPosition
+            if let engine = WebSearchEngine(rawValue: payload.webSearchEngine) {
+                selectedWebSearchEngine = engine
+            }
+            let importedHotKey = restoredHotKey(from: payload)
+            if importedHotKey != launcherHotKey {
+                applyShortcut(importedHotKey, successMessage: SettingsStrings.importAppliedMessage)
+            }
+            let sanitized = Self.sanitizedCustomSearchLocations(payload.customSearchLocations, defaultPaths: defaultSearchLocations)
+            if sanitized != customSearchLocations {
+                customSearchLocations = sanitized
+                persistCustomSearchLocations()
+                notifySearchLocationsChanged()
+            }
+            return Set(payload.pinnedItemIDs)
+
+        case .merge:
+            // Scalar settings: current wins on conflict; only unchanged scalars are a no-op.
+            // Array settings: union (import adds new entries without removing current ones).
+            var newLocations = customSearchLocations
+            var changed = false
+            for loc in payload.customSearchLocations {
+                let normalized = Self.normalizedPath(loc)
+                if !newLocations.contains(normalized) && !defaultSearchLocations.contains(normalized) {
+                    newLocations.append(normalized)
+                    changed = true
+                }
+            }
+            if changed {
+                customSearchLocations = newLocations
+                persistCustomSearchLocations()
+                notifySearchLocationsChanged()
+            }
+            return currentPinnedIDs.union(payload.pinnedItemIDs)
+        }
+    }
+
+    private func restoredHotKey(from payload: SettingsExportPayload) -> HotKey {
+        let keyCode = UInt16(exactly: payload.hotKeyCode) ?? Self.defaultLauncherHotKey.keyCode
+        let modifiers = UInt(exactly: payload.hotKeyModifiers) ?? Self.defaultLauncherHotKey.modifiers.rawValue
+        return Self.normalizedShortcut(HotKey(keyCode: keyCode, modifiers: HotKeyModifierFlags(rawValue: modifiers)))
+    }
+
     static var preview: SettingsStore {
         SettingsStore(
             selectedPane: .search,
             selectedAppearance: .followSystem,
+            selectedThemePreset: .sunrise,
             launcherHotKey: HotKey(keyCode: 17, modifiers: [.command, .option]),
             shortcutFeedback: ShortcutFeedback(
                 kind: .info,
