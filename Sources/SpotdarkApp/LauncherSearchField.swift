@@ -24,6 +24,8 @@ struct LauncherSearchField: NSViewRepresentable {
         textField.lineBreakMode = .byTruncatingTail
         textField.maximumNumberOfLines = 1
         textField.delegate = context.coordinator
+        textField.setAccessibilityLabel(LauncherStrings.searchFieldAccessibilityLabel)
+        textField.setAccessibilityHelp(LauncherStrings.searchFieldAccessibilityHint)
         return textField
     }
 

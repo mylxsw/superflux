@@ -42,6 +42,9 @@ struct LauncherEmptyStateView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue(message)
+        .accessibilityHint(hint ?? "")
     }
 }
 

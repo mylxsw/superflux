@@ -286,12 +286,16 @@ struct LauncherRowView: View {
                 .foregroundStyle(.secondary)
                 .background(iconBackground)
         case .plugin(let p):
-            Image(systemName: p.iconSystemName ?? "puzzlepiece.extension")
-                .resizable()
-                .scaledToFit()
-                .padding(5)
-                .foregroundStyle(.secondary)
-                .background(iconBackground)
+            if let bundleURL = p.iconBundleURL {
+                AppIconView(bundleURL: bundleURL)
+            } else {
+                Image(systemName: p.iconSystemName ?? "puzzlepiece.extension")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(5)
+                    .foregroundStyle(.secondary)
+                    .background(iconBackground)
+            }
         }
     }
 

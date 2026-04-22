@@ -76,6 +76,10 @@ public final class SearchEngine {
             return file.name
         case .calculator(let calc):
             return calc.displayResult
+        case .webSearch(let ws):
+            return ws.query
+        case .plugin(let p):
+            return p.title
         }
     }
 

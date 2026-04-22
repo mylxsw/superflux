@@ -6,6 +6,47 @@ public enum SearchItem: Equatable {
     case command(CommandItem)
     case file(FileItem)
     case calculator(CalculatorItem)
+    case webSearch(WebSearchItem)
+    case plugin(PluginResultItem)
+}
+
+/// Represents a web search action that opens the query in the default browser.
+public struct WebSearchItem: Equatable, Hashable, Sendable {
+    public let query: String
+    public let engine: WebSearchEngine
+    public let url: URL
+
+    public init(query: String, engine: WebSearchEngine, url: URL) {
+        self.query = query
+        self.engine = engine
+        self.url = url
+    }
+}
+
+/// Supported web search engines.
+public enum WebSearchEngine: String, CaseIterable, Sendable {
+    case google
+    case bing
+    case baidu
+
+    public var displayName: String {
+        switch self {
+        case .google: return "Google"
+        case .bing:   return "Bing"
+        case .baidu:  return "百度"
+        }
+    }
+
+    public func searchURL(for query: String) -> URL? {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        let urlString: String
+        switch self {
+        case .google: urlString = "https://www.google.com/search?q=\(encoded)"
+        case .bing:   urlString = "https://www.bing.com/search?q=\(encoded)"
+        case .baidu:  urlString = "https://www.baidu.com/s?wd=\(encoded)"
+        }
+        return URL(string: urlString)
+    }
 }
 
 /// Represents a macOS application bundle that can be launched.

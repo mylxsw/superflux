@@ -1,10 +1,11 @@
 import Foundation
+import SwiftUI
 
 enum SearchHighlight {
     /// Returns an attributed string with matched ranges highlighted.
     ///
     /// This is intentionally simple: case-insensitive substring matching.
-    static func highlight(text: String, query: String) -> AttributedString {
+    static func highlight(text: String, query: String, color: Color = .accentColor) -> AttributedString {
         var attributed = AttributedString(text)
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return attributed }
@@ -20,7 +21,7 @@ enum SearchHighlight {
             if let attrStart = AttributedString.Index(start, within: attributed),
                let attrEnd = AttributedString.Index(end, within: attributed) {
                 var container = AttributeContainer()
-                container.foregroundColor = .accentColor
+                container.foregroundColor = color
                 container.font = .system(size: 14, weight: .bold)
                 attributed[attrStart..<attrEnd].mergeAttributes(container)
             }

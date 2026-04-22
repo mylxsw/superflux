@@ -4,15 +4,29 @@ import SpotdarkCore
 
 struct LauncherRootView: View {
     @Bindable var store: LauncherStore
+    @ObservedObject private var settingsStore = SettingsStore.shared
+
+    private var theme: LauncherThemePalette {
+        settingsStore.selectedThemePreset.theme
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Base glass material.
             RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                        .fill(
+                            LinearGradient(
+                                colors: [theme.panelTintTop, theme.panelTintBottom],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
+                        .strokeBorder(theme.panelStrokeColor, lineWidth: 1)
                 )
 
             VStack(spacing: store.isShowingExpandedContent ? LauncherPanelMetrics.contentSpacing : 0) {
@@ -33,6 +47,7 @@ struct LauncherRootView: View {
         .frame(width: LauncherPanelMetrics.width)
         .frame(maxHeight: .infinity, alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous))
+        .tint(theme.accentColor)
         // Global keyboard behavior:
         // - Up/Down: navigate results
         // - Return: open selected item
@@ -84,7 +99,17 @@ struct LauncherRootView: View {
                 .fill(.thinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: LauncherPanelMetrics.searchFieldCornerRadius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                        .fill(
+                            LinearGradient(
+                                colors: [theme.searchFieldTintTop, theme.searchFieldTintBottom],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.searchFieldCornerRadius, style: .continuous)
+                        .strokeBorder(theme.searchFieldStrokeColor, lineWidth: 1)
                 )
         )
     }
