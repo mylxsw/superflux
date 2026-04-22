@@ -77,15 +77,44 @@ public final class SearchEngine {
 
     /// Lower score = better match.
     ///
-    /// Scoring rules (starter):
+    /// Scoring rules:
     /// - 0: prefix match
     /// - 1: word boundary match
     /// - 2: substring match
+    /// - 3: fuzzy match (Levenshtein distance ≤ threshold against any space-delimited word)
     private func scoreMatch(text: String, query: String) -> Int? {
         let t = text.lowercased()
         if t.hasPrefix(query) { return 0 }
         if t.contains(" " + query) { return 1 }
         if t.contains(query) { return 2 }
+        // Fuzzy: require at least 3 chars to avoid noise.
+        let maxDist = query.count >= 5 ? 2 : query.count >= 3 ? 1 : 0
+        if maxDist > 0 {
+            for word in t.split(separator: " ").map(String.init) {
+                if levenshtein(word, query) <= maxDist { return 3 }
+            }
+        }
         return nil
+    }
+
+    /// Standard Levenshtein edit distance (O(m·n) time, O(n) space).
+    private func levenshtein(_ a: String, _ b: String) -> Int {
+        let a = Array(a), b = Array(b)
+        let m = a.count, n = b.count
+        if m == 0 { return n }
+        if n == 0 { return m }
+        // Early-exit: if lengths differ by more than the allowed max, skip.
+        var prev = Array(0...n)
+        var curr = [Int](repeating: 0, count: n + 1)
+        for i in 1...m {
+            curr[0] = i
+            for j in 1...n {
+                curr[j] = a[i-1] == b[j-1]
+                    ? prev[j-1]
+                    : 1 + Swift.min(prev[j], curr[j-1], prev[j-1])
+            }
+            swap(&prev, &curr)
+        }
+        return prev[n]
     }
 }
