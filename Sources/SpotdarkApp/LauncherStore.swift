@@ -29,6 +29,7 @@ final class LauncherStore {
     private let fileSearchProvider: FileSearchProviding
     private let recentItemsProvider: @MainActor ([AppItem]) -> [SearchItem]
     private var engine: SearchEngine?
+    private let calculator = ExpressionCalculator()
 
     private let tasks = TaskBox()
     private var lastPreferredPanelHeight = LauncherPanelMetrics.collapsedHeight
@@ -59,6 +60,13 @@ final class LauncherStore {
 
     var displayedItems: [SearchItem] {
         isShowingRecentItems ? recentItems : results
+    }
+
+    var displayedSections: [LauncherItemSection] {
+        LauncherItemSectionBuilder.makeSections(
+            items: displayedItems,
+            isShowingRecentItems: isShowingRecentItems
+        )
     }
 
     init(
@@ -121,6 +129,9 @@ final class LauncherStore {
             handle(command: command)
         case .file(let file):
             NSWorkspace.shared.open(file.path)
+        case .calculator(let calc):
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(calc.copyValue, forType: .string)
         }
 
         hide()
@@ -205,7 +216,9 @@ final class LauncherStore {
 
         recentItems = []
         let appResults = engine?.search(query: trimmedQuery) ?? []
-        results = appResults
+        let calcResult = calculator.evaluate(query: trimmedQuery).map { SearchItem.calculator($0) }
+        let calcPrefix: [SearchItem] = calcResult.map { [$0] } ?? []
+        results = calcPrefix + appResults
         isSearchPending = false
         selectedIndex = clampIndex(selectedIndex)
         notifyPanelHeightChange(animated: true)
@@ -223,7 +236,7 @@ final class LauncherStore {
             for await fileItems in provider.search(query: querySnapshot) {
                 guard !Task.isCancelled else { return }
                 let fileResults = fileItems.map { SearchItem.file($0) }
-                let combined = Array((appResults + fileResults).prefix(20))
+                let combined = Array((calcPrefix + appResults + fileResults).prefix(20))
                 await MainActor.run { [weak self] in
                     guard let self, self.trimmedQuery == querySnapshot else { return }
                     self.results = combined

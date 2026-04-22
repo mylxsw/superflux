@@ -105,10 +105,9 @@ struct LauncherRootView: View {
         Group {
             if store.isShowingRecentItems {
                 LauncherItemListView(
-                    items: store.displayedItems,
+                    sections: store.displayedSections,
                     query: store.trimmedQuery,
                     selectedIndex: store.selectedIndex,
-                    sectionTitle: LauncherStrings.recentSectionTitle,
                     onSelect: { index in
                         store.select(index: index)
                     },
@@ -122,10 +121,9 @@ struct LauncherRootView: View {
                     .transition(.opacity)
             } else if store.isShowingResults {
                 LauncherItemListView(
-                    items: store.displayedItems,
+                    sections: store.displayedSections,
                     query: store.trimmedQuery,
                     selectedIndex: store.selectedIndex,
-                    sectionTitle: nil,
                     onSelect: { index in
                         store.select(index: index)
                     },

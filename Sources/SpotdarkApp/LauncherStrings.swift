@@ -7,7 +7,11 @@ enum LauncherStrings {
     static let applicationResultLabel = "Application"
     static let commandResultLabel = "Command"
     static let fileResultLabel = "File"
+    static let calculatorResultLabel = "Calculator — press Return to copy"
     static let recentSectionTitle = "Recent"
+    static let applicationsSectionTitle = "Applications"
+    static let filesSectionTitle = "Files"
+    static let commandsSectionTitle = "Commands"
 
     static let loadingTitle = "Indexing Applications"
     static let loadingMessage = "Building the initial app catalog so results can appear instantly."

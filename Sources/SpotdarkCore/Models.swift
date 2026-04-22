@@ -5,6 +5,7 @@ public enum SearchItem: Equatable {
     case application(AppItem)
     case command(CommandItem)
     case file(FileItem)
+    case calculator(CalculatorItem)
 }
 
 /// Represents a macOS application bundle that can be launched.

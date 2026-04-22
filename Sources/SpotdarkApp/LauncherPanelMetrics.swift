@@ -19,4 +19,5 @@ enum LauncherPanelMetrics {
     static let contentSwapAnimationDuration: TimeInterval = 0.12
     static let selectionScrollAnimationDuration: TimeInterval = 0.14
     static let searchDebounceNanoseconds: UInt64 = 30_000_000
+    static let groupedResultsMinimumCount = 5
 }

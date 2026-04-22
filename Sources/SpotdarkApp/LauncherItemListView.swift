@@ -3,10 +3,9 @@ import SwiftUI
 import SpotdarkCore
 
 struct LauncherItemListView: View {
-    let items: [SearchItem]
+    let sections: [LauncherItemSection]
     let query: String
     let selectedIndex: Int
-    let sectionTitle: String?
     let onSelect: (Int) -> Void
     let onActivate: (Int) -> Void
 
@@ -14,25 +13,27 @@ struct LauncherItemListView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    if let sectionTitle {
-                        LauncherSectionHeaderView(title: sectionTitle)
-                            .padding(.horizontal, 10)
-                            .padding(.top, 2)
-                            .padding(.bottom, 4)
-                    }
-
-                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                        Button {
-                            onSelect(index)
-                            onActivate(index)
-                        } label: {
-                            LauncherRowView(item: item, query: query)
+                    ForEach(sections) { section in
+                        if let title = section.title {
+                            LauncherSectionHeaderView(title: title)
                                 .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(rowBackground(isSelected: selectedIndex == index))
+                                .padding(.top, 2)
+                                .padding(.bottom, 4)
                         }
-                        .buttonStyle(.plain)
-                        .id(index)
+
+                        ForEach(section.rows) { row in
+                            Button {
+                                onSelect(row.index)
+                                onActivate(row.index)
+                            } label: {
+                                LauncherRowView(item: row.item, query: query)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(rowBackground(isSelected: selectedIndex == row.index))
+                            }
+                            .buttonStyle(.plain)
+                            .id(row.index)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
@@ -110,6 +111,8 @@ struct LauncherRowView: View {
             return cmd.title
         case .file(let file):
             return file.name
+        case .calculator(let calc):
+            return calc.displayResult
         }
     }
 
@@ -126,6 +129,8 @@ struct LauncherRowView: View {
                 return "~" + parent.dropFirst(home.count)
             }
             return parent
+        case .calculator:
+            return LauncherStrings.calculatorResultLabel
         }
     }
 
@@ -150,19 +155,28 @@ struct LauncherRowView: View {
             )
             .resizable()
             .scaledToFit()
+        case .calculator:
+            Image(systemName: "equal.square")
+                .resizable()
+                .scaledToFit()
+                .padding(4)
+                .foregroundStyle(.secondary)
+                .background(.thinMaterial)
         }
     }
 }
 
 #Preview("Recent Section") {
     LauncherItemListView(
-        items: [
-            .application(AppItem(name: "TextEdit", bundleIdentifier: nil, bundleURL: URL(fileURLWithPath: "/Applications/TextEdit.app"))),
-            .file(FileItem(name: "Quarterly Report.pdf", path: URL(fileURLWithPath: "/Users/demo/Documents/Quarterly Report.pdf"), contentType: nil, modificationDate: nil))
-        ],
+        sections: LauncherItemSectionBuilder.makeSections(
+            items: [
+                .application(AppItem(name: "TextEdit", bundleIdentifier: nil, bundleURL: URL(fileURLWithPath: "/Applications/TextEdit.app"))),
+                .file(FileItem(name: "Quarterly Report.pdf", path: URL(fileURLWithPath: "/Users/demo/Documents/Quarterly Report.pdf"), contentType: nil, modificationDate: nil))
+            ],
+            isShowingRecentItems: true
+        ),
         query: "",
         selectedIndex: 0,
-        sectionTitle: LauncherStrings.recentSectionTitle,
         onSelect: { _ in },
         onActivate: { _ in }
     )

@@ -74,6 +74,8 @@ public final class SearchEngine {
             return cmd.title
         case .file(let file):
             return file.name
+        case .calculator(let calc):
+            return calc.displayResult
         }
     }
 
