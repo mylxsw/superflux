@@ -29,6 +29,10 @@ final class LauncherPanelController: NSObject {
             CommandItem(id: "quit", title: "Quit", keywords: ["exit", "close"])
         ])
 
+        PluginManager.shared.register(searchSource: SystemInfoPlugin())
+        PluginManager.shared.register(searchSource: ClipboardHistoryPlugin())
+        ClipboardHistoryStore.shared.startMonitoring()
+
         // App indexing follows the directories configured in Settings.
         store = LauncherStore(
             commandProvider: commandRegistry,
