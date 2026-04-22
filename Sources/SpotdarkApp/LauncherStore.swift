@@ -8,11 +8,12 @@ final class LauncherStore {
     var query: String = "" {
         didSet {
             handlePresentationQueryChange(from: oldValue, to: query)
-            scheduleSearch()
+            scheduleSearch(immediate: liveTrimmedQuery.isEmpty)
         }
     }
 
     private(set) var results: [SearchItem] = []
+    private(set) var recentItems: [SearchItem] = []
     private(set) var trimmedQuery: String = ""
     private(set) var isInitialIndexing: Bool = true
     private(set) var isSearchPending: Bool = false
@@ -26,6 +27,7 @@ final class LauncherStore {
 
     private let commandProvider: CommandProviding
     private let fileSearchProvider: FileSearchProviding
+    private let recentItemsProvider: @MainActor ([AppItem]) -> [SearchItem]
     private var engine: SearchEngine?
 
     private let tasks = TaskBox()
@@ -39,25 +41,35 @@ final class LauncherStore {
         !results.isEmpty
     }
 
+    var isShowingRecentItems: Bool {
+        liveTrimmedQuery.isEmpty && !recentItems.isEmpty
+    }
+
     var isShowingNoResultsState: Bool {
         isShowingExpandedContent && !isSearchPending && !isInitialIndexing && results.isEmpty
     }
 
     var isShowingExpandedContent: Bool {
-        !liveTrimmedQuery.isEmpty
+        !liveTrimmedQuery.isEmpty || isShowingRecentItems
     }
 
     var preferredPanelHeight: CGFloat {
         isShowingExpandedContent ? LauncherPanelMetrics.expandedHeight : LauncherPanelMetrics.collapsedHeight
     }
 
+    var displayedItems: [SearchItem] {
+        isShowingRecentItems ? recentItems : results
+    }
+
     init(
         commandProvider: CommandProviding,
         indexStream: AppIndexStreaming = SpotlightIndexStream(),
-        fileSearchProvider: FileSearchProviding = SpotlightFileSearchProvider()
+        fileSearchProvider: FileSearchProviding = SpotlightFileSearchProvider(),
+        recentItemsProvider: @escaping @MainActor ([AppItem]) -> [SearchItem] = LauncherStore.defaultRecentItems
     ) {
         self.commandProvider = commandProvider
         self.fileSearchProvider = fileSearchProvider
+        self.recentItemsProvider = recentItemsProvider
 
         startIndexing(stream: indexStream)
         rebuildEngine(apps: [])
@@ -76,6 +88,7 @@ final class LauncherStore {
         query = ""
         trimmedQuery = ""
         results = []
+        refreshRecentItems()
         isSearchPending = false
         selectedIndex = 0
         notifyPanelHeightChange(force: true, animated: false)
@@ -87,7 +100,7 @@ final class LauncherStore {
     }
 
     func moveSelection(delta: Int) {
-        guard !results.isEmpty else {
+        guard !displayedItems.isEmpty else {
             selectedIndex = 0
             return
         }
@@ -95,8 +108,8 @@ final class LauncherStore {
     }
 
     func performSelectedAction() {
-        guard selectedIndex >= 0, selectedIndex < results.count else { return }
-        perform(item: results[selectedIndex])
+        guard selectedIndex >= 0, selectedIndex < displayedItems.count else { return }
+        perform(item: displayedItems[selectedIndex])
     }
 
     func perform(item: SearchItem) {
@@ -160,6 +173,7 @@ final class LauncherStore {
     private func rebuildEngine(apps: [AppItem]) {
         let commands = commandProvider.allCommands()
         engine = SearchEngine(apps: apps, commands: commands, usage: UsageStore.shared)
+        refreshRecentItems()
         scheduleSearch(immediate: true)
     }
 
@@ -179,6 +193,17 @@ final class LauncherStore {
 
     private func performSearchNow() {
         trimmedQuery = liveTrimmedQuery
+        guard !trimmedQuery.isEmpty else {
+            tasks.cancelFileSearchTask()
+            refreshRecentItems()
+            results = []
+            isSearchPending = false
+            selectedIndex = clampIndex(selectedIndex)
+            notifyPanelHeightChange(animated: true)
+            return
+        }
+
+        recentItems = []
         let appResults = engine?.search(query: trimmedQuery) ?? []
         results = appResults
         isSearchPending = false
@@ -209,8 +234,8 @@ final class LauncherStore {
     }
 
     private func clampIndex(_ index: Int) -> Int {
-        guard !results.isEmpty else { return 0 }
-        return min(max(index, 0), results.count - 1)
+        guard !displayedItems.isEmpty else { return 0 }
+        return min(max(index, 0), displayedItems.count - 1)
     }
 
     private func handle(command: CommandItem) {
@@ -226,6 +251,58 @@ final class LauncherStore {
 
     private var liveTrimmedQuery: String {
         query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func refreshRecentItems() {
+        recentItems = recentItemsProvider(Array(indexedAppsByURL.values))
+    }
+
+    private static func defaultRecentItems(from apps: [AppItem]) -> [SearchItem] {
+        let recentApps = UsageStore.shared
+            .recentApps(from: apps, limit: LauncherPanelMetrics.recentItemsLimit)
+            .map(SearchItem.application)
+        let recentFiles = Array(
+            NSDocumentController.shared.recentDocumentURLs
+            .prefix(LauncherPanelMetrics.recentItemsLimit)
+            .map { url in
+                SearchItem.file(
+                    FileItem(
+                        name: url.lastPathComponent,
+                        path: url,
+                        contentType: nil,
+                        modificationDate: nil
+                    )
+                )
+            }
+        )
+
+        var combined: [SearchItem] = []
+        var appIterator = recentApps.makeIterator()
+        var fileIterator = recentFiles.makeIterator()
+
+        while combined.count < LauncherPanelMetrics.recentItemsLimit {
+            var appendedItem = false
+
+            if let app = appIterator.next() {
+                combined.append(app)
+                appendedItem = true
+            }
+            if combined.count == LauncherPanelMetrics.recentItemsLimit {
+                break
+            }
+            if let file = fileIterator.next() {
+                combined.append(file)
+                appendedItem = true
+            }
+            if combined.count == LauncherPanelMetrics.recentItemsLimit {
+                break
+            }
+            if !appendedItem {
+                break
+            }
+        }
+
+        return combined
     }
 
     private func handlePresentationQueryChange(from oldValue: String, to newValue: String) {

@@ -103,36 +103,36 @@ struct LauncherRootView: View {
 
     private var resultsList: some View {
         Group {
-            if store.isInitialIndexing {
+            if store.isShowingRecentItems {
+                LauncherItemListView(
+                    items: store.displayedItems,
+                    query: store.trimmedQuery,
+                    selectedIndex: store.selectedIndex,
+                    sectionTitle: LauncherStrings.recentSectionTitle,
+                    onSelect: { index in
+                        store.select(index: index)
+                    },
+                    onActivate: { _ in
+                        store.performSelectedAction()
+                    }
+                )
+                .transition(.opacity)
+            } else if store.isInitialIndexing {
                 LauncherLoadingStateView()
                     .transition(.opacity)
             } else if store.isShowingResults {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 4) {
-                            ForEach(Array(store.results.enumerated()), id: \.offset) { index, item in
-                                Button {
-                                    store.select(index: index)
-                                    store.performSelectedAction()
-                                } label: {
-                                    LauncherRowView(item: item, query: store.trimmedQuery)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(rowBackground(isSelected: store.selectedIndex == index))
-                                }
-                                .buttonStyle(.plain)
-                                .id(index)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                LauncherItemListView(
+                    items: store.displayedItems,
+                    query: store.trimmedQuery,
+                    selectedIndex: store.selectedIndex,
+                    sectionTitle: nil,
+                    onSelect: { index in
+                        store.select(index: index)
+                    },
+                    onActivate: { _ in
+                        store.performSelectedAction()
                     }
-                    .background(Color.clear)
-                    .onChange(of: store.selectedIndex) {
-                        withAnimation(.snappy(duration: LauncherPanelMetrics.selectionScrollAnimationDuration, extraBounce: 0)) {
-                            proxy.scrollTo(store.selectedIndex, anchor: .center)
-                        }
-                    }
-                }
+                )
                 .transition(.opacity)
             } else if store.isShowingNoResultsState {
                 LauncherEmptyStateView(
@@ -152,92 +152,7 @@ struct LauncherRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.snappy(duration: LauncherPanelMetrics.expandedContentAnimationDuration, extraBounce: 0), value: store.isInitialIndexing)
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingResults)
+        .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingRecentItems)
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingNoResultsState)
-    }
-
-    @ViewBuilder
-    private func rowBackground(isSelected: Bool) -> some View {
-        if isSelected {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.accentColor.opacity(0.18))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 1)
-                )
-        } else {
-            Color.clear
-        }
-    }
-}
-
-struct LauncherRowView: View {
-    let item: SearchItem
-    let query: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            icon
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(SearchHighlight.highlight(text: title, query: query))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .contentShape(Rectangle())
-    }
-
-    private var title: String {
-        switch item {
-        case .application(let app):
-            return app.name
-        case .command(let cmd):
-            return cmd.title
-        case .file(let file):
-            return file.name
-        }
-    }
-
-    private var subtitle: String {
-        switch item {
-        case .application:
-            return LauncherStrings.applicationResultLabel
-        case .command:
-            return LauncherStrings.commandResultLabel
-        case .file(let file):
-            let parent = file.path.deletingLastPathComponent().path
-            let home = FileManager.default.homeDirectoryForCurrentUser.path
-            if parent.hasPrefix(home) {
-                return "~" + parent.dropFirst(home.count)
-            }
-            return parent
-        }
-    }
-
-    @ViewBuilder
-    private var icon: some View {
-        switch item {
-        case .application(let app):
-            AppIconView(bundleURL: app.bundleURL)
-        case .command:
-            Image(systemName: "command")
-                .resizable()
-                .scaledToFit()
-                .padding(5)
-                .foregroundStyle(.secondary)
-                .background(.thinMaterial)
-        case .file(let file):
-            Image(nsImage: AppPresentationCache.shared.fileIcon(for: file.path, size: CGSize(width: 28, height: 28)))
-                .resizable()
-                .scaledToFit()
-        }
     }
 }

@@ -23,6 +23,10 @@ let package = Package(
         .testTarget(
             name: "SpotdarkCoreTests",
             dependencies: ["SpotdarkCore"]
+        ),
+        .testTarget(
+            name: "SpotdarkAppTests",
+            dependencies: ["SpotdarkApp"]
         )
     ]
 )

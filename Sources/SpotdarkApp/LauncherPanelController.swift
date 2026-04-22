@@ -16,6 +16,8 @@ final class LauncherPanel: NSPanel {
 final class LauncherPanelController: NSObject {
     private let panel: LauncherPanel
     private let store: LauncherStore
+    private var visibilityAnimationID: UInt = 0
+    private var suppressedFramePersistenceCount = 0
 
     var isVisible: Bool {
         panel.isVisible
@@ -81,42 +83,88 @@ final class LauncherPanelController: NSObject {
     func showCenteredAndFocus() {
         store.prepareForPresentation()
         if SettingsStore.shared.remembersPanelPosition, let savedOrigin = restoredPanelOrigin(for: store.preferredPanelHeight) {
-            panel.setFrameOrigin(savedOrigin)
+            withSuppressedFramePersistence {
+                panel.setFrameOrigin(savedOrigin)
+            }
         } else {
             centerOnScreen()
         }
+
+        let finalFrame = panel.frame.integral
+        let initialFrame = finalFrame.offsetBy(dx: 0, dy: LauncherPanelMetrics.panelPresentationOffset).integral
+        let animationID = nextVisibilityAnimationID()
+
         NSApp.activate(ignoringOtherApps: true)
+        beginSuppressingFramePersistence()
+        panel.alphaValue = panel.isVisible ? panel.alphaValue : 0
+        panel.setFrame(initialFrame, display: false)
         panel.makeKeyAndOrderFront(nil)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = LauncherPanelMetrics.panelPresentationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+            panel.animator().setFrame(finalFrame, display: true)
+        } completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.endSuppressingFramePersistence()
+
+                guard animationID == self.visibilityAnimationID else { return }
+                self.panel.alphaValue = 1
+            }
+        }
     }
 
     private func centerOnScreen() {
         guard let screen = NSScreen.main else { return }
-        let frame = screen.frame
-        let origin = NSPoint(
-            x: round(frame.midX - panel.frame.width / 2),
-            y: round(frame.midY - panel.frame.height / 2)
-        )
-        panel.setFrameOrigin(origin)
+        // Use screen.frame for horizontal center so a side Dock doesn't shift midX.
+        // Use visibleFrame for vertical center so the panel stays above a bottom Dock.
+        let x = round(screen.frame.midX - panel.frame.width / 2)
+        let y = round(screen.visibleFrame.midY - panel.frame.height / 2)
+        withSuppressedFramePersistence {
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
+        }
     }
 
     private func restoredPanelOrigin(for height: CGFloat) -> NSPoint? {
-        guard let data = UserDefaults.standard.dictionary(forKey: savedPanelOriginKey),
-              let x = data["x"] as? Double else {
+        guard let data = UserDefaults.standard.dictionary(forKey: savedPanelOriginKey) else {
             return nil
         }
 
-        if let top = data["top"] as? Double {
-            return NSPoint(x: x, y: top - height)
-        }
-
-        guard let y = data["y"] as? Double else {
-            return nil
-        }
-        return NSPoint(x: x, y: y)
+        return LauncherPanelPositioning.restoredOrigin(
+            from: data,
+            panelSize: CGSize(width: LauncherPanelMetrics.width, height: height),
+            visibleFrames: NSScreen.screens.map(\.visibleFrame)
+        )
     }
 
     func hide() {
-        panel.orderOut(nil)
+        guard panel.isVisible else { return }
+
+        let animationID = nextVisibilityAnimationID()
+        let targetFrame = panel.frame
+            .offsetBy(dx: 0, dy: LauncherPanelMetrics.panelPresentationOffset * 0.7)
+            .integral
+
+        beginSuppressingFramePersistence()
+        panel.alphaValue = max(panel.alphaValue, 0.001)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = LauncherPanelMetrics.panelDismissalDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+            panel.animator().setFrame(targetFrame, display: true)
+        } completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.endSuppressingFramePersistence()
+
+                guard animationID == self.visibilityAnimationID else { return }
+                self.panel.orderOut(nil)
+                self.panel.alphaValue = 1
+            }
+        }
     }
 
     private func updatePanelHeight(_ height: CGFloat, animated: Bool) {
@@ -131,22 +179,49 @@ final class LauncherPanelController: NSObject {
         ).integral
 
         guard animated, panel.isVisible else {
-            panel.setFrame(newFrame, display: true)
+            withSuppressedFramePersistence {
+                panel.setFrame(newFrame, display: true)
+            }
             return
         }
 
+        beginSuppressingFramePersistence()
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = LauncherPanelMetrics.panelAnimationDuration
+            context.duration = LauncherPanelMetrics.panelResizeAnimationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().setFrame(newFrame, display: true)
+        } completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.endSuppressingFramePersistence()
+            }
         }
+    }
+
+    private func nextVisibilityAnimationID() -> UInt {
+        visibilityAnimationID &+= 1
+        return visibilityAnimationID
+    }
+
+    private func beginSuppressingFramePersistence() {
+        suppressedFramePersistenceCount += 1
+    }
+
+    private func endSuppressingFramePersistence() {
+        suppressedFramePersistenceCount = max(0, suppressedFramePersistenceCount - 1)
+    }
+
+    private func withSuppressedFramePersistence(_ action: () -> Void) {
+        beginSuppressingFramePersistence()
+        action()
+        endSuppressingFramePersistence()
     }
 }
 
 extension LauncherPanelController: NSWindowDelegate {
     nonisolated func windowDidMove(_ notification: Notification) {
         Task { @MainActor in
-            guard SettingsStore.shared.remembersPanelPosition else { return }
+            guard SettingsStore.shared.remembersPanelPosition,
+                  suppressedFramePersistenceCount == 0 else { return }
             let frame = panel.frame
             UserDefaults.standard.set(
                 ["x": frame.origin.x, "top": frame.maxY],
