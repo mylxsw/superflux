@@ -65,7 +65,8 @@ final class LauncherStore {
     var displayedSections: [LauncherItemSection] {
         LauncherItemSectionBuilder.makeSections(
             items: displayedItems,
-            isShowingRecentItems: isShowingRecentItems
+            isShowingRecentItems: isShowingRecentItems,
+            pinnedIDs: PinnedItemsStore.shared.pinnedIDs
         )
     }
 
@@ -81,6 +82,13 @@ final class LauncherStore {
 
         startIndexing(stream: indexStream)
         rebuildEngine(apps: [])
+
+        PluginManager.shared.onChange = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.rebuildEngine(apps: Array(self.indexedAppsByURL.values))
+            }
+        }
     }
 
     deinit {
@@ -132,6 +140,10 @@ final class LauncherStore {
         case .calculator(let calc):
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(calc.copyValue, forType: .string)
+        case .webSearch(let webSearch):
+            NSWorkspace.shared.open(webSearch.url)
+        case .plugin(let pluginItem):
+            PluginManager.shared.searchSource(for: pluginItem.pluginID)?.perform(item: pluginItem)
         }
 
         hide()
@@ -182,8 +194,9 @@ final class LauncherStore {
     }
 
     private func rebuildEngine(apps: [AppItem]) {
-        let commands = commandProvider.allCommands()
-        engine = SearchEngine(apps: apps, commands: commands, usage: UsageStore.shared)
+        let builtInCommands = commandProvider.allCommands()
+        let pluginCommands = PluginManager.shared.actionPlugins().flatMap { $0.commands() }
+        engine = SearchEngine(apps: apps, commands: builtInCommands + pluginCommands, usage: UsageStore.shared)
         refreshRecentItems()
         scheduleSearch(immediate: true)
     }
@@ -215,10 +228,27 @@ final class LauncherStore {
         }
 
         recentItems = []
+
+        // Queries starting with "?" force a web search without running other providers.
+        if trimmedQuery.hasPrefix("?") {
+            let webQuery = trimmedQuery.dropFirst().trimmingCharacters(in: .whitespaces)
+            tasks.cancelFileSearchTask()
+            results = webQuery.isEmpty ? [] : [makeWebSearchItem(query: webQuery)]
+            isSearchPending = false
+            selectedIndex = clampIndex(selectedIndex)
+            notifyPanelHeightChange(animated: true)
+            return
+        }
+
         let appResults = engine?.search(query: trimmedQuery) ?? []
         let calcResult = calculator.evaluate(query: trimmedQuery).map { SearchItem.calculator($0) }
         let calcPrefix: [SearchItem] = calcResult.map { [$0] } ?? []
-        results = calcPrefix + appResults
+        let pluginResults = PluginManager.shared.searchSources()
+            .flatMap { $0.search(query: trimmedQuery) }
+            .sorted { $0.score < $1.score }
+            .map { SearchItem.plugin($0.item) }
+        let baseResults = calcPrefix + appResults + pluginResults
+        results = baseResults.isEmpty ? [makeWebSearchItem(query: trimmedQuery)] : baseResults
         isSearchPending = false
         selectedIndex = clampIndex(selectedIndex)
         notifyPanelHeightChange(animated: true)
@@ -236,14 +266,20 @@ final class LauncherStore {
             for await fileItems in provider.search(query: querySnapshot) {
                 guard !Task.isCancelled else { return }
                 let fileResults = fileItems.map { SearchItem.file($0) }
-                let combined = Array((calcPrefix + appResults + fileResults).prefix(20))
+                let combined = Array((calcPrefix + appResults + pluginResults + fileResults).prefix(20))
                 await MainActor.run { [weak self] in
                     guard let self, self.trimmedQuery == querySnapshot else { return }
-                    self.results = combined
+                    self.results = combined.isEmpty ? [self.makeWebSearchItem(query: querySnapshot)] : combined
                     self.selectedIndex = self.clampIndex(self.selectedIndex)
                 }
             }
         })
+    }
+
+    private func makeWebSearchItem(query: String) -> SearchItem {
+        let engine = SettingsStore.shared.selectedWebSearchEngine
+        let url = engine.searchURL(for: query) ?? URL(string: "https://www.google.com")!
+        return SearchItem.webSearch(WebSearchItem(query: query, engine: engine, url: url))
     }
 
     private func clampIndex(_ index: Int) -> Int {
@@ -258,7 +294,7 @@ final class LauncherStore {
         case "quit":
             NSApp.terminate(nil)
         default:
-            break
+            PluginManager.shared.actionPlugin(for: command.id)?.handle(commandID: command.id)
         }
     }
 

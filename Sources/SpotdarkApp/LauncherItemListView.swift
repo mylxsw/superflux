@@ -9,6 +9,14 @@ struct LauncherItemListView: View {
     let onSelect: (Int) -> Void
     let onActivate: (Int) -> Void
 
+    @AccessibilityFocusState private var accessibilityFocusedRowIndex: Int?
+    @ObservedObject private var settingsStore = SettingsStore.shared
+    private var pinnedStore: PinnedItemsStore { PinnedItemsStore.shared }
+
+    private var theme: LauncherThemePalette {
+        settingsStore.selectedThemePreset.theme
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -26,39 +34,79 @@ struct LauncherItemListView: View {
                                 onSelect(row.index)
                                 onActivate(row.index)
                             } label: {
-                                LauncherRowView(item: row.item, query: query)
+                                LauncherRowView(
+                                    item: row.item,
+                                    query: query,
+                                    isSelected: selectedIndex == row.index,
+                                    isPinned: pinnedStore.isPinned(row.item)
+                                )
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                                     .background(rowBackground(isSelected: selectedIndex == row.index))
                             }
                             .buttonStyle(.plain)
                             .id(row.index)
+                            .accessibilityFocused($accessibilityFocusedRowIndex, equals: row.index)
+                            .contextMenu {
+                                if stableID(for: row.item) != nil {
+                                    if pinnedStore.isPinned(row.item) {
+                                        Button(LauncherStrings.unpinItemLabel) {
+                                            pinnedStore.unpin(row.item)
+                                        }
+                                    } else {
+                                        Button(LauncherStrings.pinItemLabel) {
+                                            pinnedStore.pin(row.item)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
                 .padding(.vertical, 2)
             }
             .background(Color.clear)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(listAccessibilityLabel)
             .onChange(of: selectedIndex) {
                 withAnimation(.snappy(duration: LauncherPanelMetrics.selectionScrollAnimationDuration, extraBounce: 0)) {
                     proxy.scrollTo(selectedIndex, anchor: .center)
                 }
+                syncAccessibilityFocus()
             }
+            .onAppear(perform: syncAccessibilityFocus)
+            .onChange(of: sections, syncAccessibilityFocus)
         }
+    }
+
+    private var listAccessibilityLabel: String {
+        sections.contains { $0.kind == .recent }
+            ? LauncherStrings.recentItemsAccessibilityLabel
+            : LauncherStrings.searchResultsAccessibilityLabel
     }
 
     @ViewBuilder
     private func rowBackground(isSelected: Bool) -> some View {
         if isSelected {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.accentColor.opacity(0.18))
+                .fill(theme.selectionFillColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 1)
+                        .strokeBorder(theme.selectionStrokeColor, lineWidth: 1)
                 )
         } else {
             Color.clear
         }
+    }
+
+    private func syncAccessibilityFocus() {
+        let rowIndices = sections.flatMap(\.rows).map(\.index)
+        guard !rowIndices.isEmpty else {
+            accessibilityFocusedRowIndex = nil
+            return
+        }
+
+        accessibilityFocusedRowIndex = rowIndices.contains(selectedIndex) ? selectedIndex : rowIndices[0]
     }
 }
 
@@ -81,6 +129,14 @@ private struct LauncherSectionHeaderView: View {
 struct LauncherRowView: View {
     let item: SearchItem
     let query: String
+    let isSelected: Bool
+    var isPinned: Bool = false
+
+    @ObservedObject private var settingsStore = SettingsStore.shared
+
+    private var theme: LauncherThemePalette {
+        settingsStore.selectedThemePreset.theme
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -89,7 +145,7 @@ struct LauncherRowView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(SearchHighlight.highlight(text: title, query: query))
+                Text(SearchHighlight.highlight(text: title, query: query, color: theme.accentColor))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
@@ -99,8 +155,20 @@ struct LauncherRowView: View {
             }
 
             Spacer(minLength: 0)
+
+            if isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(45))
+            }
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(accessibilityHint)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var title: String {
@@ -113,6 +181,10 @@ struct LauncherRowView: View {
             return file.name
         case .calculator(let calc):
             return calc.displayResult
+        case .webSearch(let ws):
+            return String(format: LauncherStrings.webSearchResultTitleTemplate, ws.engine.displayName, ws.query)
+        case .plugin(let p):
+            return p.title
         }
     }
 
@@ -131,6 +203,50 @@ struct LauncherRowView: View {
             return parent
         case .calculator:
             return LauncherStrings.calculatorResultLabel
+        case .webSearch:
+            return LauncherStrings.webSearchResultLabel
+        case .plugin(let p):
+            return p.subtitle ?? LauncherStrings.pluginResultLabel
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch item {
+        case .application:
+            return String(format: LauncherStrings.applicationResultAccessibilityLabelTemplate, title)
+        case .command:
+            return String(format: LauncherStrings.commandResultAccessibilityLabelTemplate, title)
+        case .file:
+            return String(format: LauncherStrings.fileResultAccessibilityLabelTemplate, title)
+        case .calculator:
+            return String(format: LauncherStrings.calculatorResultAccessibilityLabelTemplate, title)
+        case .webSearch:
+            return title
+        case .plugin:
+            return String(format: LauncherStrings.pluginResultAccessibilityLabelTemplate, title)
+        }
+    }
+
+    private var accessibilityValue: String {
+        switch item {
+        case .application, .command, .webSearch, .plugin:
+            return isSelected ? LauncherStrings.resultSelectedAccessibilityValue : ""
+        case .file:
+            let location = String(format: LauncherStrings.fileResultAccessibilityValueTemplate, subtitle)
+            return isSelected ? [location, LauncherStrings.resultSelectedAccessibilityValue].joined(separator: ". ") : location
+        case .calculator:
+            return isSelected ? LauncherStrings.resultSelectedAccessibilityValue : title
+        }
+    }
+
+    private var accessibilityHint: String {
+        switch item {
+        case .application, .file, .webSearch, .plugin:
+            return LauncherStrings.openResultAccessibilityHint
+        case .command:
+            return LauncherStrings.runCommandAccessibilityHint
+        case .calculator:
+            return LauncherStrings.copyCalculatorResultAccessibilityHint
         }
     }
 
@@ -145,7 +261,7 @@ struct LauncherRowView: View {
                 .scaledToFit()
                 .padding(5)
                 .foregroundStyle(.secondary)
-                .background(.thinMaterial)
+                .background(iconBackground)
         case .file(let file):
             Image(
                 nsImage: AppPresentationCache.shared.fileIcon(
@@ -161,8 +277,31 @@ struct LauncherRowView: View {
                 .scaledToFit()
                 .padding(4)
                 .foregroundStyle(.secondary)
-                .background(.thinMaterial)
+                .background(iconBackground)
+        case .webSearch:
+            Image(systemName: "magnifyingglass")
+                .resizable()
+                .scaledToFit()
+                .padding(5)
+                .foregroundStyle(.secondary)
+                .background(iconBackground)
+        case .plugin(let p):
+            Image(systemName: p.iconSystemName ?? "puzzlepiece.extension")
+                .resizable()
+                .scaledToFit()
+                .padding(5)
+                .foregroundStyle(.secondary)
+                .background(iconBackground)
         }
+    }
+
+    private var iconBackground: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(theme.capsuleFillColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(theme.capsuleStrokeColor, lineWidth: 1)
+            )
     }
 }
 
