@@ -76,6 +76,30 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
         XCTAssertEqual(store.displayedItems.count, 1)
     }
 
+    func testFallbackTextInputUpdatesQueryBeforeFieldFocus() async throws {
+        let store = LauncherStore(
+            commandProvider: CommandRegistry(),
+            indexStream: StubAppIndexStream(
+                items: [
+                    .initial([
+                        IndexedApplication(bundleURL: URL(fileURLWithPath: "/Applications/Notes.app"))
+                    ])
+                ]
+            ),
+            fileSearchProvider: EmptyFileSearchProvider(),
+            recentItemsProvider: { _ in [] }
+        )
+
+        try await waitUntil {
+            !store.isInitialIndexing
+        }
+
+        store.insertTextInput("n")
+
+        XCTAssertEqual(store.query, "n")
+        XCTAssertTrue(store.isShowingExpandedContent)
+    }
+
     func testClearingQueryWithoutRecentItemsCollapsesPanel() async throws {
         let store = LauncherStore(
             commandProvider: CommandRegistry(),

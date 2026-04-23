@@ -3,11 +3,11 @@ import SwiftUI
 
 enum LauncherGlassStyle {
     static let accent = Color(red: 0.10, green: 0.48, blue: 0.98)
-    static let panelTintTop = Color.black.opacity(0.34)
-    static let panelTintBottom = Color.black.opacity(0.48)
-    static let panelHighlight = Color.white.opacity(0.07)
-    static let panelStroke = Color.white.opacity(0.12)
-    static let divider = Color.white.opacity(0.08)
+    static let panelTintTop = Color.black.opacity(0.04)
+    static let panelTintBottom = Color.black.opacity(0.08)
+    static let panelHighlight = Color.white.opacity(0.18)
+    static let panelStroke = Color.white.opacity(0.22)
+    static let divider = Color.white.opacity(0.12)
     static let title = Color.white.opacity(0.94)
     static let secondary = Color.white.opacity(0.70)
     static let tertiary = Color.white.opacity(0.48)
@@ -29,10 +29,6 @@ struct LauncherGlassBackground: View {
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.clear)
-            .background(
-                GlassMaterialView(material: .hudWindow, blendingMode: .behindWindow)
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
@@ -72,7 +68,8 @@ struct GlassMaterialView: NSViewRepresentable {
         view.state = .active
         view.material = material
         view.blendingMode = blendingMode
-        view.isEmphasized = true
+        view.appearance = NSAppearance(named: .vibrantDark)
+        view.isEmphasized = false
         return view
     }
 
@@ -80,6 +77,7 @@ struct GlassMaterialView: NSViewRepresentable {
         nsView.state = .active
         nsView.material = material
         nsView.blendingMode = blendingMode
-        nsView.isEmphasized = true
+        nsView.appearance = NSAppearance(named: .vibrantDark)
+        nsView.isEmphasized = false
     }
 }

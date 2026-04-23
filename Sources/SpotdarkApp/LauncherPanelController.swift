@@ -7,8 +7,32 @@ private let savedPanelOriginKey = "settings.savedPanelFrame"
 
 /// A borderless panel that can become key/main to accept text input.
 final class LauncherPanel: NSPanel {
+    var onUnhandledTextInput: ((String) -> Void)?
+
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if let text = capturedText(from: event) {
+            onUnhandledTextInput?(text)
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    private func capturedText(from event: NSEvent) -> String? {
+        let blockedModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
+        guard event.modifierFlags.intersection(blockedModifiers).isEmpty,
+              let text = event.characters,
+              !text.isEmpty,
+              text.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
+        else {
+            return nil
+        }
+
+        return text
+    }
 }
 
 /// Hosts the SwiftUI launcher view inside an NSPanel.
@@ -16,6 +40,7 @@ final class LauncherPanel: NSPanel {
 final class LauncherPanelController: NSObject {
     private let panel: LauncherPanel
     private let store: LauncherStore
+    private let hosting: NSHostingController<LauncherRootView>
     private var visibilityAnimationID: UInt = 0
     private var suppressedFramePersistenceCount = 0
 
@@ -42,7 +67,7 @@ final class LauncherPanelController: NSObject {
         )
 
         let rootView = LauncherRootView(store: store)
-        let hosting = NSHostingController(rootView: rootView)
+        hosting = NSHostingController(rootView: rootView)
 
         panel = LauncherPanel(
             contentRect: NSRect(
@@ -70,7 +95,27 @@ final class LauncherPanelController: NSObject {
             panel.toolbarStyle = .unifiedCompact
         }
 
-        panel.contentViewController = hosting
+        let visualEffectView = NSVisualEffectView()
+        visualEffectView.state = .active
+        visualEffectView.material = .hudWindow
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.appearance = NSAppearance(named: .vibrantDark)
+        visualEffectView.isEmphasized = false
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = LauncherPanelMetrics.cornerRadius
+        visualEffectView.layer?.cornerCurve = .continuous
+        visualEffectView.layer?.masksToBounds = true
+
+        hosting.view.translatesAutoresizingMaskIntoConstraints = false
+        visualEffectView.addSubview(hosting.view)
+        NSLayoutConstraint.activate([
+            hosting.view.leadingAnchor.constraint(equalTo: visualEffectView.leadingAnchor),
+            hosting.view.trailingAnchor.constraint(equalTo: visualEffectView.trailingAnchor),
+            hosting.view.topAnchor.constraint(equalTo: visualEffectView.topAnchor),
+            hosting.view.bottomAnchor.constraint(equalTo: visualEffectView.bottomAnchor)
+        ])
+
+        panel.contentView = visualEffectView
         panel.contentView?.wantsLayer = true
         panel.contentView?.layer?.cornerRadius = LauncherPanelMetrics.cornerRadius
         panel.contentView?.layer?.cornerCurve = .continuous
@@ -86,6 +131,11 @@ final class LauncherPanelController: NSObject {
         super.init()
 
         panel.delegate = self
+        panel.onUnhandledTextInput = { [weak store] text in
+            Task { @MainActor [weak store] in
+                store?.insertTextInput(text)
+            }
+        }
         store.onPanelHeightChange = { [weak self] height, animated in
             self?.updatePanelHeight(height, animated: animated)
         }
@@ -137,7 +187,9 @@ final class LauncherPanelController: NSObject {
             screenFrame: screen.frame,
             visibleFrame: screen.visibleFrame,
             verticalOffsetRatio: LauncherPanelMetrics.compactVerticalOffsetRatio,
-            maximumVerticalOffset: LauncherPanelMetrics.compactVerticalOffsetMaximum
+            maximumVerticalOffset: LauncherPanelMetrics.compactVerticalOffsetMaximum,
+            expandedHeight: LauncherPanelMetrics.expandedHeight,
+            expandedBottomScreenMargin: LauncherPanelMetrics.expandedBottomScreenMargin
         )
         withSuppressedFramePersistence {
             panel.setFrameOrigin(origin)

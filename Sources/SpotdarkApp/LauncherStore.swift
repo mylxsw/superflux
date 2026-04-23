@@ -99,6 +99,12 @@ final class LauncherStore {
         focusRequestID += 1
     }
 
+    func insertTextInput(_ text: String) {
+        guard !text.isEmpty else { return }
+        query += text
+        requestFocus()
+    }
+
     func prepareForPresentation() {
         tasks.cancelSearchTask()
         query = ""

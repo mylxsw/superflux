@@ -7,16 +7,26 @@ enum LauncherPanelPositioning {
         screenFrame: CGRect,
         visibleFrame: CGRect,
         verticalOffsetRatio: CGFloat,
-        maximumVerticalOffset: CGFloat
+        maximumVerticalOffset: CGFloat,
+        expandedHeight: CGFloat? = nil,
+        expandedBottomScreenMargin: CGFloat = 0
     ) -> CGPoint {
         let verticalOffset = min(visibleFrame.height * verticalOffsetRatio, maximumVerticalOffset)
         let center = CGPoint(
             x: screenFrame.midX,
             y: visibleFrame.midY + verticalOffset
         )
+
+        var topEdge = center.y + panelSize.height / 2
+        if let expandedHeight {
+            let minimumTopEdge = visibleFrame.minY + expandedHeight + expandedBottomScreenMargin
+            topEdge = max(topEdge, minimumTopEdge)
+            topEdge = min(topEdge, visibleFrame.maxY)
+        }
+
         return CGPoint(
             x: round(center.x - panelSize.width / 2),
-            y: round(center.y - panelSize.height / 2)
+            y: round(topEdge - panelSize.height)
         )
     }
 

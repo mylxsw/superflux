@@ -4,25 +4,27 @@ import XCTest
 final class LauncherPanelPositioningTests: XCTestCase {
     func testCompactOriginPlacesPanelAboveVisibleCenter() {
         let origin = LauncherPanelPositioning.compactOrigin(
-            panelSize: CGSize(width: 640, height: 64),
+            panelSize: CGSize(width: LauncherPanelMetrics.width, height: 64),
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 860),
             verticalOffsetRatio: 0.12,
-            maximumVerticalOffset: 110
+            maximumVerticalOffset: 110,
+            expandedHeight: LauncherPanelMetrics.expandedHeight,
+            expandedBottomScreenMargin: LauncherPanelMetrics.expandedBottomScreenMargin
         )
 
-        XCTAssertEqual(origin.x, 400)
-        XCTAssertEqual(origin.y, 501)
+        XCTAssertEqual(origin.x, 320)
+        XCTAssertEqual(origin.y, 632)
     }
 
     func testOriginKeepingTopEdgeExpandsPanelDownward() {
         let origin = LauncherPanelPositioning.originKeepingTopEdge(
-            currentFrame: CGRect(x: 400, y: 501, width: 640, height: 64),
-            newHeight: 340
+            currentFrame: CGRect(x: 320, y: 632, width: LauncherPanelMetrics.width, height: 64),
+            newHeight: LauncherPanelMetrics.expandedHeight
         )
 
-        XCTAssertEqual(origin.x, 400)
-        XCTAssertEqual(origin.y, 225)
+        XCTAssertEqual(origin.x, 320)
+        XCTAssertEqual(origin.y, 16)
     }
 
     func testRestoredOriginReturnsSavedPositionWhenFrameFitsVisibleScreen() {

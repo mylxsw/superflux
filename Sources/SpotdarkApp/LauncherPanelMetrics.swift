@@ -2,10 +2,10 @@ import CoreGraphics
 import Foundation
 
 enum LauncherPanelMetrics {
-    static let width: CGFloat = 640
+    static let width: CGFloat = 800
     static let searchFieldHeight: CGFloat = 52
     static let collapsedHeight: CGFloat = 64
-    static let expandedHeight: CGFloat = 340
+    static let expandedHeight: CGFloat = 680
     static let recentItemsLimit = 5
     static let cornerRadius: CGFloat = 18
     static let contentPadding: CGFloat = 0
@@ -23,6 +23,7 @@ enum LauncherPanelMetrics {
     static let footerHeight: CGFloat = 42
     static let compactVerticalOffsetRatio: CGFloat = 0.12
     static let compactVerticalOffsetMaximum: CGFloat = 110
+    static let expandedBottomScreenMargin: CGFloat = 16
     static let panelResizeAnimationDuration: TimeInterval = 0.14
     static let panelPresentationDuration: TimeInterval = 0.18
     static let panelDismissalDuration: TimeInterval = 0.14

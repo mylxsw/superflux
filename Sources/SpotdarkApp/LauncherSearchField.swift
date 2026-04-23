@@ -36,6 +36,12 @@ final class LauncherSearchFieldContainerView: NSView {
 
         shouldFocusWhenAttached = false
         window.makeFirstResponder(textField)
+        placeCursorAtEnd()
+    }
+
+    func placeCursorAtEnd() {
+        guard let editor = window?.fieldEditor(false, for: textField) as? NSTextView else { return }
+        editor.selectedRange = NSRange(location: textField.stringValue.utf16.count, length: 0)
     }
 
     private func configure() {
@@ -94,6 +100,7 @@ struct LauncherSearchField: NSViewRepresentable {
         let textField = nsView.textField
         if textField.stringValue != text {
             textField.stringValue = text
+            nsView.placeCursorAtEnd()
         }
 
         textField.font = .systemFont(ofSize: 18, weight: .medium)
