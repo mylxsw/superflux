@@ -11,9 +11,15 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             SDSidebar(selectedPane: $store.selectedPane)
-            Divider()
             contentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5)
+                )
+                .padding(EdgeInsets(top: 12, leading: 8, bottom: 12, trailing: 12))
         }
         .frame(width: 820, height: 520)
         .background(Color(NSColor.windowBackgroundColor))
@@ -84,7 +90,7 @@ private struct SDSidebar: View {
             Spacer(minLength: 0)
         }
         .frame(width: 180)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.55))
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 
@@ -121,6 +127,7 @@ private struct SDSidebarNavItem: View {
                           ? Color.primary.opacity(0.08)
                           : Color.clear)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -831,6 +838,7 @@ private struct ThemePresetCard: View {
                             .strokeBorder(isSelected ? theme.selectionStrokeColor : Color.primary.opacity(0.08), lineWidth: 1)
                     )
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
