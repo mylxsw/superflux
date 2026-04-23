@@ -1,33 +1,50 @@
 import AppKit
 import SwiftUI
 
-private final class VerticallyCenteredTextFieldCell: NSTextFieldCell {
-    override func drawingRect(forBounds rect: NSRect) -> NSRect {
-        centeredRect(for: super.drawingRect(forBounds: rect))
-    }
+final class LauncherSearchFieldContainerView: NSView {
+    let textField: NSTextField
 
-    override func select(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText, delegate: Any?, start selStart: Int, length selLength: Int) {
-        super.select(withFrame: centeredRect(for: rect), in: controlView, editor: textObj, delegate: delegate, start: selStart, length: selLength)
-    }
-
-    private func centeredRect(for rect: NSRect) -> NSRect {
-        guard let font else { return rect }
-        let titleSize = cellSize(forBounds: rect)
-        let targetHeight = max(titleSize.height, font.ascender - font.descender)
-        let offset = floor((rect.height - targetHeight) / 2)
-        return rect.insetBy(dx: 0, dy: max(0, offset))
-    }
-}
-
-private final class CenteredTextField: NSTextField {
     override init(frame frameRect: NSRect) {
+        textField = NSTextField()
         super.init(frame: frameRect)
-        cell = VerticallyCenteredTextFieldCell(textCell: "")
+        configure()
     }
 
     required init?(coder: NSCoder) {
+        textField = NSTextField()
         super.init(coder: coder)
-        cell = VerticallyCenteredTextFieldCell(textCell: "")
+        configure()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(textField)
+        super.mouseDown(with: event)
+    }
+
+    private func configure() {
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.isBordered = false
+        textField.isBezeled = false
+        textField.isEditable = true
+        textField.isSelectable = true
+        textField.drawsBackground = false
+        textField.focusRingType = .none
+        textField.lineBreakMode = .byTruncatingTail
+        textField.maximumNumberOfLines = 1
+        textField.alignment = .left
+        textField.cell?.usesSingleLineMode = true
+        textField.font = .systemFont(ofSize: 22, weight: .medium)
+
+        addSubview(textField)
+        NSLayoutConstraint.activate([
+            textField.leadingAnchor.constraint(equalTo: leadingAnchor),
+            textField.trailingAnchor.constraint(equalTo: trailingAnchor),
+            textField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            textField.heightAnchor.constraint(equalToConstant: 28)
+        ])
     }
 }
 
@@ -46,32 +63,25 @@ struct LauncherSearchField: NSViewRepresentable {
         Coordinator(parent: self)
     }
 
-    func makeNSView(context: Context) -> NSTextField {
-        let textField = CenteredTextField()
-        textField.isBordered = false
-        textField.drawsBackground = false
-        textField.focusRingType = .none
-        textField.font = .systemFont(ofSize: 22, weight: .medium)
-        textField.lineBreakMode = .byTruncatingTail
-        textField.maximumNumberOfLines = 1
-        textField.delegate = context.coordinator
-        textField.alignment = .left
-        textField.isBezeled = false
-        textField.cell?.usesSingleLineMode = true
-        textField.setAccessibilityLabel(LauncherStrings.searchFieldAccessibilityLabel)
-        textField.setAccessibilityHelp(LauncherStrings.searchFieldAccessibilityHint)
-        return textField
+    func makeNSView(context: Context) -> LauncherSearchFieldContainerView {
+        let containerView = LauncherSearchFieldContainerView()
+        containerView.textField.delegate = context.coordinator
+        containerView.textField.setAccessibilityLabel(LauncherStrings.searchFieldAccessibilityLabel)
+        containerView.textField.setAccessibilityHelp(LauncherStrings.searchFieldAccessibilityHint)
+        return containerView
     }
 
-    func updateNSView(_ nsView: NSTextField, context: Context) {
+    func updateNSView(_ nsView: LauncherSearchFieldContainerView, context: Context) {
         context.coordinator.parent = self
 
-        if nsView.stringValue != text {
-            nsView.stringValue = text
+        let textField = nsView.textField
+        if textField.stringValue != text {
+            textField.stringValue = text
         }
 
-        nsView.textColor = textColor
-        nsView.placeholderAttributedString = NSAttributedString(
+        textField.font = .systemFont(ofSize: 22, weight: .medium)
+        textField.textColor = textColor
+        textField.placeholderAttributedString = NSAttributedString(
             string: placeholder,
             attributes: [
                 .foregroundColor: placeholderColor,
@@ -82,7 +92,7 @@ struct LauncherSearchField: NSViewRepresentable {
         if context.coordinator.lastFocusRequestID != focusRequestID {
             context.coordinator.lastFocusRequestID = focusRequestID
             DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView)
+                nsView.window?.makeFirstResponder(textField)
             }
         }
     }

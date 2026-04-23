@@ -11,41 +11,25 @@ struct LauncherRootView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [theme.panelTintTop, theme.panelTintBottom],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-                        .strokeBorder(theme.panelStrokeColor, lineWidth: 1)
-                )
+        ZStack {
+            panelBackground
 
-            VStack(spacing: store.isShowingExpandedContent ? LauncherPanelMetrics.contentSpacing : 0) {
+            VStack(spacing: 0) {
                 searchBar
-                if store.isShowingExpandedContent {
-                    resultsList
-                        .transition(
-                            .asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
-                                removal: .opacity.combined(with: .scale(scale: 0.995, anchor: .top))
-                            )
-                        )
-                }
+                Rectangle()
+                    .fill(theme.dividerColor)
+                    .frame(height: 1)
+
+                bodyContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                LauncherStatusFooterView(isIndexing: store.isInitialIndexing)
             }
-            .padding(LauncherPanelMetrics.contentPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(width: LauncherPanelMetrics.width)
         .frame(maxHeight: .infinity, alignment: .top)
+        .compositingGroup()
         .clipShape(RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous))
         .tint(theme.accentColor)
         // Global keyboard behavior:
@@ -68,14 +52,42 @@ struct LauncherRootView: View {
         }
     }
 
+    private var panelBackground: some View {
+        RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [theme.panelBackgroundTop, theme.panelBackgroundBottom],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [theme.panelTintTop, theme.panelTintBottom],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
+                    .strokeBorder(theme.panelStrokeColor, lineWidth: 0.75)
+            )
+    }
+
     private var searchBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(theme.searchPlaceholderColor)
 
             LauncherSearchField(
                 text: $store.query,
                 placeholder: LauncherStrings.searchPlaceholder,
+                textColor: NSColor(theme.searchTextColor),
+                placeholderColor: NSColor(theme.searchPlaceholderColor),
                 focusRequestID: store.focusRequestID,
                 onMoveSelection: { delta in
                     store.moveSelection(delta: delta)
@@ -88,30 +100,14 @@ struct LauncherRootView: View {
                 }
             )
             .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 30)
 
             LauncherShortcutHintView(settingsStore: SettingsStore.shared)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.horizontal, LauncherPanelMetrics.searchBarHorizontalPadding)
+        .padding(.top, LauncherPanelMetrics.searchBarTopPadding)
+        .padding(.bottom, LauncherPanelMetrics.searchBarBottomPadding)
         .frame(height: LauncherPanelMetrics.searchFieldHeight)
-        .background(
-            RoundedRectangle(cornerRadius: LauncherPanelMetrics.searchFieldCornerRadius, style: .continuous)
-                .fill(.thinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.searchFieldCornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [theme.searchFieldTintTop, theme.searchFieldTintBottom],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.searchFieldCornerRadius, style: .continuous)
-                        .strokeBorder(theme.searchFieldStrokeColor, lineWidth: 1)
-                )
-        )
     }
 
     private var defaultActionButton: some View {
@@ -177,5 +173,22 @@ struct LauncherRootView: View {
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingResults)
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingRecentItems)
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingNoResultsState)
+    }
+
+    @ViewBuilder
+    private var bodyContent: some View {
+        if store.isShowingExpandedContent {
+            resultsList
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
+                        removal: .opacity.combined(with: .scale(scale: 0.995, anchor: .top))
+                    )
+                )
+        } else {
+            Color.clear
+                .frame(height: LauncherPanelMetrics.collapsedBodyHeight)
+                .allowsHitTesting(false)
+        }
     }
 }

@@ -61,7 +61,7 @@ final class LauncherPanelController: NSObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.hidesOnDeactivate = true
         panel.isMovableByWindowBackground = true
         panel.animationBehavior = .utilityWindow
@@ -71,10 +71,17 @@ final class LauncherPanelController: NSObject {
         }
 
         panel.contentViewController = hosting
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.cornerRadius = LauncherPanelMetrics.cornerRadius
+        panel.contentView?.layer?.cornerCurve = .continuous
+        panel.contentView?.layer?.masksToBounds = true
 
         // Make SwiftUI background transparent; SwiftUI draws its own material.
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.view.layer?.cornerRadius = LauncherPanelMetrics.cornerRadius
+        hosting.view.layer?.cornerCurve = .continuous
+        hosting.view.layer?.masksToBounds = true
 
         super.init()
 
@@ -177,9 +184,16 @@ final class LauncherPanelController: NSObject {
         let currentFrame = panel.frame
         guard abs(currentFrame.height - height) > 0.5 else { return }
 
+        let originY: CGFloat
+        if SettingsStore.shared.remembersPanelPosition {
+            originY = currentFrame.maxY - height
+        } else {
+            originY = currentFrame.midY - (height / 2)
+        }
+
         let newFrame = NSRect(
             x: round(currentFrame.origin.x),
-            y: round(currentFrame.maxY - height),
+            y: round(originY),
             width: LauncherPanelMetrics.width,
             height: height
         ).integral

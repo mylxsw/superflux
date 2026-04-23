@@ -11,6 +11,7 @@ struct LauncherItemListView: View {
 
     @AccessibilityFocusState private var accessibilityFocusedRowIndex: Int?
     @ObservedObject private var settingsStore = SettingsStore.shared
+    @State private var hoveredRowIndex: Int?
     private var pinnedStore: PinnedItemsStore { PinnedItemsStore.shared }
 
     private var theme: LauncherThemePalette {
@@ -20,13 +21,13 @@ struct LauncherItemListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 4) {
+                LazyVStack(spacing: 3) {
                     ForEach(sections) { section in
                         if let title = section.title {
                             LauncherSectionHeaderView(title: title)
                                 .padding(.horizontal, 10)
-                                .padding(.top, 2)
-                                .padding(.bottom, 4)
+                                .padding(.top, 1)
+                                .padding(.bottom, 3)
                         }
 
                         ForEach(section.rows) { row in
@@ -42,11 +43,19 @@ struct LauncherItemListView: View {
                                 )
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
-                                    .background(rowBackground(isSelected: selectedIndex == row.index))
+                                    .background(
+                                        rowBackground(
+                                            isSelected: selectedIndex == row.index,
+                                            isHovered: hoveredRowIndex == row.index
+                                        )
+                                    )
                             }
                             .buttonStyle(.plain)
                             .id(row.index)
                             .accessibilityFocused($accessibilityFocusedRowIndex, equals: row.index)
+                            .onHover { isHovered in
+                                hoveredRowIndex = isHovered ? row.index : (hoveredRowIndex == row.index ? nil : hoveredRowIndex)
+                            }
                             .contextMenu {
                                 if stableID(for: row.item) != nil {
                                     if pinnedStore.isPinned(row.item) {
@@ -63,7 +72,9 @@ struct LauncherItemListView: View {
                         }
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.horizontal, LauncherPanelMetrics.resultsHorizontalPadding)
+                .padding(.top, LauncherPanelMetrics.resultsTopPadding)
+                .padding(.bottom, LauncherPanelMetrics.resultsBottomPadding)
             }
             .background(Color.clear)
             .accessibilityElement(children: .contain)
@@ -86,14 +97,17 @@ struct LauncherItemListView: View {
     }
 
     @ViewBuilder
-    private func rowBackground(isSelected: Bool) -> some View {
+    private func rowBackground(isSelected: Bool, isHovered: Bool) -> some View {
         if isSelected {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: LauncherPanelMetrics.rowCornerRadius, style: .continuous)
                 .fill(theme.selectionFillColor)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: LauncherPanelMetrics.rowCornerRadius, style: .continuous)
                         .strokeBorder(theme.selectionStrokeColor, lineWidth: 1)
                 )
+        } else if isHovered {
+            RoundedRectangle(cornerRadius: LauncherPanelMetrics.rowCornerRadius, style: .continuous)
+                .fill(theme.rowHoverFillColor)
         } else {
             Color.clear
         }
@@ -112,14 +126,19 @@ struct LauncherItemListView: View {
 
 private struct LauncherSectionHeaderView: View {
     let title: String
+    @ObservedObject private var settingsStore = SettingsStore.shared
+
+    private var theme: LauncherThemePalette {
+        settingsStore.selectedThemePreset.theme
+    }
 
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(theme.tertiaryTextColor)
                 .textCase(.uppercase)
-                .tracking(0.8)
+                .tracking(1.0)
 
             Spacer(minLength: 0)
         }
@@ -141,28 +160,38 @@ struct LauncherRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             icon
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .frame(width: LauncherPanelMetrics.rowIconSize, height: LauncherPanelMetrics.rowIconSize)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(SearchHighlight.highlight(text: title, query: query, color: theme.accentColor))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(theme.secondaryTextColor)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(subtitleColor)
                     .lineLimit(1)
             }
 
             Spacer(minLength: 0)
 
-            if isPinned {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .rotationEffect(.degrees(45))
+            HStack(spacing: 10) {
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(theme.tertiaryTextColor)
+                        .rotationEffect(.degrees(45))
+                }
+
+                if isSelected {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.selectedChevronColor)
+                }
             }
         }
+        .frame(minHeight: LauncherPanelMetrics.rowMinHeight - 4)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
@@ -254,19 +283,22 @@ struct LauncherRowView: View {
     private var icon: some View {
         switch item {
         case .application(let app):
-            AppIconView(bundleURL: app.bundleURL)
+            AppIconView(
+                bundleURL: app.bundleURL,
+                size: CGSize(width: LauncherPanelMetrics.rowIconSize, height: LauncherPanelMetrics.rowIconSize)
+            )
         case .command:
             Image(systemName: "command")
                 .resizable()
                 .scaledToFit()
-                .padding(5)
-                .foregroundStyle(.secondary)
+                .padding(6)
+                .foregroundStyle(theme.secondaryTextColor)
                 .background(iconBackground)
         case .file(let file):
             Image(
                 nsImage: AppPresentationCache.shared.fileIcon(
                     for: file.path,
-                    size: CGSize(width: 28, height: 28)
+                    size: CGSize(width: LauncherPanelMetrics.rowIconSize, height: LauncherPanelMetrics.rowIconSize)
                 )
             )
             .resizable()
@@ -275,27 +307,39 @@ struct LauncherRowView: View {
             Image(systemName: "equal.square")
                 .resizable()
                 .scaledToFit()
-                .padding(4)
-                .foregroundStyle(.secondary)
+                .padding(5)
+                .foregroundStyle(theme.secondaryTextColor)
                 .background(iconBackground)
         case .webSearch:
             Image(systemName: "magnifyingglass")
                 .resizable()
                 .scaledToFit()
-                .padding(5)
-                .foregroundStyle(.secondary)
+                .padding(6)
+                .foregroundStyle(theme.secondaryTextColor)
                 .background(iconBackground)
         case .plugin(let p):
             if let bundleURL = p.iconBundleURL {
-                AppIconView(bundleURL: bundleURL)
+                AppIconView(
+                    bundleURL: bundleURL,
+                    size: CGSize(width: LauncherPanelMetrics.rowIconSize, height: LauncherPanelMetrics.rowIconSize)
+                )
             } else {
                 Image(systemName: p.iconSystemName ?? "puzzlepiece.extension")
                     .resizable()
                     .scaledToFit()
-                    .padding(5)
-                    .foregroundStyle(.secondary)
+                    .padding(6)
+                    .foregroundStyle(theme.secondaryTextColor)
                     .background(iconBackground)
             }
+        }
+    }
+
+    private var subtitleColor: Color {
+        switch item {
+        case .application:
+            theme.subtitleAccentColor
+        default:
+            theme.tertiaryTextColor
         }
     }
 
@@ -304,7 +348,7 @@ struct LauncherRowView: View {
             .fill(theme.capsuleFillColor)
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(theme.capsuleStrokeColor, lineWidth: 1)
+                    .strokeBorder(theme.capsuleStrokeColor, lineWidth: 0.8)
             )
     }
 }

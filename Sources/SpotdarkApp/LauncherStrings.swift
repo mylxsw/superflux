@@ -1,10 +1,15 @@
 import Foundation
 
 enum LauncherStrings {
-    static let searchPlaceholder = "Search apps or commands"
+    static let searchPlaceholder = "Search"
     static let searchFieldAccessibilityLabel = "Search"
     static let searchFieldAccessibilityHint = "Type to search apps, files, and commands. Use the arrow keys to move through results, Return to confirm, and Escape to close."
     static let launcherShortcutAccessibilityLabelTemplate = "Launcher shortcut %@"
+    static let launcherStatusAppNameFallback = "Spotdark"
+    static let launcherStatusVersionTemplate = "%@ v%@"
+    static let launcherStatusAccessibilityLabel = "Launcher status"
+    static let launcherStatusReadyAccessibilityValue = "Ready"
+    static let launcherStatusIndexingAccessibilityValue = "Indexing"
     static let searchResultsAccessibilityLabel = "Search results"
     static let recentItemsAccessibilityLabel = "Recent items"
     static let resultSelectedAccessibilityValue = "Selected"
