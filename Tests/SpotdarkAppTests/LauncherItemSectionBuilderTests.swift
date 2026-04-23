@@ -3,7 +3,7 @@ import SpotdarkCore
 @testable import SpotdarkApp
 
 final class LauncherItemSectionBuilderTests: XCTestCase {
-    func testSearchResultsGroupByTypeInStableOrder() {
+    func testSearchResultsUseSingleUnifiedSectionInInputOrder() {
         let app = SearchItem.application(
             AppItem(
                 name: "Notes",
@@ -29,13 +29,12 @@ final class LauncherItemSectionBuilderTests: XCTestCase {
             minimumGroupedItemCount: 5
         )
 
-        XCTAssertEqual(sections.map(\.kind), [.applications, .files, .commands])
-        XCTAssertEqual(sections[0].rows.map(\.index), [1, 3])
-        XCTAssertEqual(sections[1].rows.map(\.index), [2])
-        XCTAssertEqual(sections[2].rows.map(\.index), [0, 4])
+        XCTAssertEqual(sections.map(\.kind), [.mixed])
+        XCTAssertNil(sections.first?.title)
+        XCTAssertEqual(sections[0].rows.map(\.index), [0, 1, 2, 3, 4])
     }
 
-    func testSmallResultSetsCollapseIntoSingleSection() {
+    func testSmallResultSetsUseSingleUnifiedSection() {
         let sections = LauncherItemSectionBuilder.makeSections(
             items: [
                 .application(
@@ -59,11 +58,10 @@ final class LauncherItemSectionBuilderTests: XCTestCase {
         )
 
         XCTAssertEqual(sections.map(\.kind), [.mixed])
-        XCTAssertNil(sections.first?.title)
-        XCTAssertEqual(sections.first?.rows.map(\.index), [0, 1])
+        XCTAssertEqual(sections[0].rows.map(\.index), [0, 1])
     }
 
-    func testSingleTypeResultsStayCollapsedEvenAboveThreshold() {
+    func testSingleTypeResultsUseSingleUnifiedSection() {
         let sections = LauncherItemSectionBuilder.makeSections(
             items: [
                 .command(CommandItem(id: "quit", title: "Quit", keywords: [])),
@@ -80,7 +78,27 @@ final class LauncherItemSectionBuilderTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.map(\.index), [0, 1, 2, 3, 4])
     }
 
-    func testVisualRowOrderFollowsSectionOrder() {
+    func testUnifiedSectionCanContainAllSearchableItemTypes() {
+        let app = SearchItem.application(
+            AppItem(name: "Notes", bundleIdentifier: nil, bundleURL: URL(fileURLWithPath: "/Applications/Notes.app"))
+        )
+        let file = SearchItem.file(
+            FileItem(name: "notes.txt", path: URL(fileURLWithPath: "/Users/demo/notes.txt"), contentType: nil, modificationDate: nil)
+        )
+        let command = SearchItem.command(CommandItem(id: "open-settings", title: "Open Settings", keywords: []))
+        let plugin = SearchItem.plugin(PluginResultItem(pluginID: "test.plugin", id: "copy", title: "Copy"))
+
+        let sections = LauncherItemSectionBuilder.makeSections(
+            items: [file, app, plugin, command, app, file],
+            isShowingRecentItems: false,
+            minimumGroupedItemCount: 5
+        )
+
+        XCTAssertEqual(sections.map(\.kind), [.mixed])
+        XCTAssertEqual(sections[0].rows.map(\.index), [0, 1, 2, 3, 4, 5])
+    }
+
+    func testVisualRowOrderFollowsUnifiedResultOrder() {
         let app = SearchItem.application(
             AppItem(name: "Notes", bundleIdentifier: nil, bundleURL: URL(fileURLWithPath: "/Applications/Notes.app"))
         )
@@ -90,8 +108,7 @@ final class LauncherItemSectionBuilderTests: XCTestCase {
         let command = SearchItem.command(CommandItem(id: "open-settings", title: "Open Settings", keywords: []))
 
         // Items are interleaved: command(0), app(1), file(2), app(3), command(4)
-        // Sections produce: applications [1,3], files [2], commands [0,4]
-        // Expected visual order: 1, 3, 2, 0, 4 (apps first, then files, then commands)
+        // The unified section preserves the already-ranked result order.
         let sections = LauncherItemSectionBuilder.makeSections(
             items: [command, app, file, app, command],
             isShowingRecentItems: false,
@@ -99,7 +116,7 @@ final class LauncherItemSectionBuilderTests: XCTestCase {
         )
 
         let visualOrder = sections.flatMap(\.rows).map(\.index)
-        XCTAssertEqual(visualOrder, [1, 3, 2, 0, 4])
+        XCTAssertEqual(visualOrder, [0, 1, 2, 3, 4])
     }
 
     func testRecentItemsAlwaysUseRecentSection() {

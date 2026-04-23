@@ -101,9 +101,8 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
     }
 
     func testMoveSelectionNavigatesAcrossSectionsInVisualOrder() async throws {
-        // Three apps + four files = seven items (>= groupedResultsMinimumCount=5) with two kinds,
-        // which forces the section builder to split into applications + files groups.
         // Query must be >= 2 chars to trigger the file search task.
+        // Search results are now displayed as one unified, already-ranked list.
         let store = LauncherStore(
             commandProvider: CommandRegistry(),
             indexStream: StubAppIndexStream(items: [
@@ -127,12 +126,10 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
         store.query = "sa"   // length >= 2 triggers file search
 
         try await waitUntil {
-            store.isShowingResults && store.displayedSections.count >= 2
+            store.isShowingResults && store.displayedItems.count == 7
         }
 
-        // Confirm sections are split: applications and files
-        XCTAssertTrue(store.displayedSections.contains { $0.kind == .applications })
-        XCTAssertTrue(store.displayedSections.contains { $0.kind == .files })
+        XCTAssertEqual(store.displayedSections.map(\.kind), [.mixed])
 
         // selectedIndex starts at 0; step through every item via moveSelection
         let totalItems = store.displayedItems.count
@@ -159,6 +156,35 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
             reverseIndices.append(store.selectedIndex)
         }
         XCTAssertEqual(Set(reverseIndices).count, totalItems)
+    }
+
+    func testFileResultsCanRankAheadOfApplicationsByNameMatch() async throws {
+        let store = LauncherStore(
+            commandProvider: CommandRegistry(),
+            indexStream: StubAppIndexStream(items: [
+                .initial([
+                    IndexedApplication(bundleURL: URL(fileURLWithPath: "/Applications/My Safe App.app"))
+                ])
+            ]),
+            fileSearchProvider: StubFileSearchProvider(items: [
+                FileItem(name: "safe.txt", path: URL(fileURLWithPath: "/tmp/safe.txt"), contentType: nil, modificationDate: nil)
+            ]),
+            recentItemsProvider: { _ in [] }
+        )
+
+        try await waitUntil { !store.isInitialIndexing }
+
+        store.query = "safe"
+
+        try await waitUntil {
+            store.displayedItems.count == 2
+        }
+
+        XCTAssertEqual(store.displayedSections.map(\.kind), [.mixed])
+        guard case .file(let file) = store.displayedItems.first else {
+            return XCTFail("Expected prefix-matching file result to rank before word-boundary application match")
+        }
+        XCTAssertEqual(file.name, "safe.txt")
     }
 
     func testClearingQueryWithoutRecentItemsCollapsesPanel() async throws {

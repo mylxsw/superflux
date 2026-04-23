@@ -264,7 +264,8 @@ final class LauncherStore {
             .flatMap { $0.search(query: trimmedQuery) }
             .sorted { $0.score < $1.score }
             .map { SearchItem.plugin($0.item) }
-        let baseResults = calcPrefix + appResults + pluginResults
+        let rankedBaseResults = rankedResults(appResults + pluginResults, query: trimmedQuery)
+        let baseResults = calcPrefix + rankedBaseResults
         results = baseResults.isEmpty ? [makeWebSearchItem(query: trimmedQuery)] : baseResults
         isSearchPending = false
         selectedIndex = clampIndex(selectedIndex)
@@ -283,7 +284,8 @@ final class LauncherStore {
             for await fileItems in provider.search(query: querySnapshot) {
                 guard !Task.isCancelled else { return }
                 let fileResults = fileItems.map { SearchItem.file($0) }
-                let combined = Array((calcPrefix + appResults + pluginResults + fileResults).prefix(20))
+                let rankedResults = self.rankedResults(appResults + pluginResults + fileResults, query: querySnapshot)
+                let combined = Array((calcPrefix + rankedResults).prefix(20))
                 await MainActor.run { [weak self] in
                     guard let self, self.trimmedQuery == querySnapshot else { return }
                     self.results = combined.isEmpty ? [self.makeWebSearchItem(query: querySnapshot)] : combined
@@ -297,6 +299,56 @@ final class LauncherStore {
         let engine = SettingsStore.shared.selectedWebSearchEngine
         let url = engine.searchURL(for: query) ?? URL(string: "https://www.google.com")!
         return SearchItem.webSearch(WebSearchItem(query: query, engine: engine, url: url))
+    }
+
+    private func rankedResults(_ items: [SearchItem], query: String) -> [SearchItem] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedQuery.isEmpty else { return items }
+
+        return items.enumerated()
+            .sorted { lhs, rhs in
+                let lhsScore = matchScore(for: lhs.element, query: normalizedQuery)
+                let rhsScore = matchScore(for: rhs.element, query: normalizedQuery)
+                if lhsScore != rhsScore { return lhsScore < rhsScore }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
+    private func matchScore(for item: SearchItem, query: String) -> Int {
+        searchableTexts(for: item)
+            .compactMap { textMatchScore($0, query: query) }
+            .min() ?? 4
+    }
+
+    private func searchableTexts(for item: SearchItem) -> [String] {
+        switch item {
+        case .application(let app):
+            return [app.name]
+        case .command(let command):
+            return [command.title] + command.keywords
+        case .file(let file):
+            return [file.name]
+        case .plugin(let plugin):
+            return [plugin.title, plugin.subtitle].compactMap { $0 }
+        case .calculator(let calculator):
+            return [calculator.displayResult]
+        case .webSearch(let webSearch):
+            return [webSearch.query]
+        }
+    }
+
+    private func textMatchScore(_ text: String, query: String) -> Int? {
+        let lowerText = text.lowercased()
+        if lowerText.hasPrefix(query) { return 0 }
+        if lowerText
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .dropFirst()
+            .contains(where: { $0.hasPrefix(query) }) {
+            return 1
+        }
+        if lowerText.contains(query) { return 2 }
+        return nil
     }
 
     private func clampIndex(_ index: Int) -> Int {

@@ -56,7 +56,7 @@ enum LauncherItemSectionBuilder {
         items: [SearchItem],
         isShowingRecentItems: Bool,
         pinnedIDs: Set<String> = [],
-        minimumGroupedItemCount: Int = LauncherPanelMetrics.groupedResultsMinimumCount
+        minimumGroupedItemCount _: Int = LauncherPanelMetrics.groupedResultsMinimumCount
     ) -> [LauncherItemSection] {
         guard !items.isEmpty else { return [] }
 
@@ -88,19 +88,7 @@ enum LauncherItemSectionBuilder {
             if isShowingRecentItems {
                 sections.append(LauncherItemSection(kind: .recent, rows: remainingRows))
             } else {
-                let groupedRows = Dictionary(grouping: remainingRows) { kind(for: $0.item) }
-                let orderedKinds: [LauncherItemSection.Kind] = [.applications, .files, .commands, .plugin]
-                let nonEmptyKinds = orderedKinds.filter { groupedRows[$0]?.isEmpty == false }
-                let shouldCollapse = remainingRows.count < minimumGroupedItemCount || nonEmptyKinds.count <= 1
-
-                if shouldCollapse {
-                    sections.append(LauncherItemSection(kind: .mixed, rows: remainingRows))
-                } else {
-                    sections += orderedKinds.compactMap { kind in
-                        guard let sectionRows = groupedRows[kind], !sectionRows.isEmpty else { return nil }
-                        return LauncherItemSection(kind: kind, rows: sectionRows)
-                    }
-                }
+                sections.append(LauncherItemSection(kind: .mixed, rows: remainingRows))
             }
         }
 
@@ -110,22 +98,5 @@ enum LauncherItemSectionBuilder {
         }
 
         return sections
-    }
-
-    private static func kind(for item: SearchItem) -> LauncherItemSection.Kind {
-        switch item {
-        case .application:
-            return .applications
-        case .file:
-            return .files
-        case .command:
-            return .commands
-        case .calculator:
-            return .calculator
-        case .webSearch:
-            return .webSearch
-        case .plugin:
-            return .plugin
-        }
     }
 }
