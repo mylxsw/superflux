@@ -10,18 +10,13 @@ struct LauncherItemListView: View {
     let onActivate: (Int) -> Void
 
     @AccessibilityFocusState private var accessibilityFocusedRowIndex: Int?
-    @ObservedObject private var settingsStore = SettingsStore.shared
     @State private var hoveredRowIndex: Int?
     private var pinnedStore: PinnedItemsStore { PinnedItemsStore.shared }
-
-    private var theme: LauncherThemePalette {
-        settingsStore.selectedThemePreset.theme
-    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 3) {
+                LazyVStack(spacing: 2) {
                     ForEach(sections) { section in
                         if let title = section.title {
                             LauncherSectionHeaderView(title: title)
@@ -41,8 +36,8 @@ struct LauncherItemListView: View {
                                     isSelected: selectedIndex == row.index,
                                     isPinned: pinnedStore.isPinned(row.item)
                                 )
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
                                     .background(
                                         rowBackground(
                                             isSelected: selectedIndex == row.index,
@@ -100,14 +95,14 @@ struct LauncherItemListView: View {
     private func rowBackground(isSelected: Bool, isHovered: Bool) -> some View {
         if isSelected {
             RoundedRectangle(cornerRadius: LauncherPanelMetrics.rowCornerRadius, style: .continuous)
-                .fill(theme.selectionFillColor)
+                .fill(LauncherGlassStyle.selectionFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: LauncherPanelMetrics.rowCornerRadius, style: .continuous)
-                        .strokeBorder(theme.selectionStrokeColor, lineWidth: 1)
+                        .strokeBorder(LauncherGlassStyle.selectionStroke, lineWidth: 1)
                 )
         } else if isHovered {
             RoundedRectangle(cornerRadius: LauncherPanelMetrics.rowCornerRadius, style: .continuous)
-                .fill(theme.rowHoverFillColor)
+                .fill(LauncherGlassStyle.hoverFill)
         } else {
             Color.clear
         }
@@ -126,19 +121,14 @@ struct LauncherItemListView: View {
 
 private struct LauncherSectionHeaderView: View {
     let title: String
-    @ObservedObject private var settingsStore = SettingsStore.shared
-
-    private var theme: LauncherThemePalette {
-        settingsStore.selectedThemePreset.theme
-    }
 
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(theme.tertiaryTextColor)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(LauncherGlassStyle.tertiary)
                 .textCase(.uppercase)
-                .tracking(1.0)
+                .tracking(0.9)
 
             Spacer(minLength: 0)
         }
@@ -151,25 +141,25 @@ struct LauncherRowView: View {
     let isSelected: Bool
     var isPinned: Bool = false
 
-    @ObservedObject private var settingsStore = SettingsStore.shared
-
-    private var theme: LauncherThemePalette {
-        settingsStore.selectedThemePreset.theme
-    }
-
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             icon
                 .frame(width: LauncherPanelMetrics.rowIconSize, height: LauncherPanelMetrics.rowIconSize)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(SearchHighlight.highlight(text: title, query: query, color: theme.accentColor))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(theme.secondaryTextColor)
+                Text(
+                    SearchHighlight.highlight(
+                        text: title,
+                        query: query,
+                        color: isSelected ? LauncherGlassStyle.selectedHighlight : LauncherGlassStyle.selectionFill
+                    )
+                )
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(isSelected ? Color.white : LauncherGlassStyle.title)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(subtitleColor)
                     .lineLimit(1)
             }
@@ -180,14 +170,20 @@ struct LauncherRowView: View {
                 if isPinned {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 10))
-                        .foregroundStyle(theme.tertiaryTextColor)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.88) : LauncherGlassStyle.tertiary)
                         .rotationEffect(.degrees(45))
                 }
 
                 if isSelected {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.selectedChevronColor)
+                    Text("↩")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.white.opacity(0.16))
+                        )
                 }
             }
         }
@@ -292,7 +288,7 @@ struct LauncherRowView: View {
                 .resizable()
                 .scaledToFit()
                 .padding(6)
-                .foregroundStyle(theme.secondaryTextColor)
+                .foregroundStyle(LauncherGlassStyle.secondary)
                 .background(iconBackground)
         case .file(let file):
             Image(
@@ -308,14 +304,14 @@ struct LauncherRowView: View {
                 .resizable()
                 .scaledToFit()
                 .padding(5)
-                .foregroundStyle(theme.secondaryTextColor)
+                .foregroundStyle(LauncherGlassStyle.secondary)
                 .background(iconBackground)
         case .webSearch:
             Image(systemName: "magnifyingglass")
                 .resizable()
                 .scaledToFit()
                 .padding(6)
-                .foregroundStyle(theme.secondaryTextColor)
+                .foregroundStyle(LauncherGlassStyle.secondary)
                 .background(iconBackground)
         case .plugin(let p):
             if let bundleURL = p.iconBundleURL {
@@ -328,27 +324,22 @@ struct LauncherRowView: View {
                     .resizable()
                     .scaledToFit()
                     .padding(6)
-                    .foregroundStyle(theme.secondaryTextColor)
+                    .foregroundStyle(LauncherGlassStyle.secondary)
                     .background(iconBackground)
             }
         }
     }
 
     private var subtitleColor: Color {
-        switch item {
-        case .application:
-            theme.subtitleAccentColor
-        default:
-            theme.tertiaryTextColor
-        }
+        isSelected ? Color.white.opacity(0.88) : LauncherGlassStyle.secondary
     }
 
     private var iconBackground: some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(theme.capsuleFillColor)
+            .fill(LauncherGlassStyle.capsuleFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(theme.capsuleStrokeColor, lineWidth: 0.8)
+                    .strokeBorder(LauncherGlassStyle.capsuleStroke, lineWidth: 0.8)
             )
     }
 }

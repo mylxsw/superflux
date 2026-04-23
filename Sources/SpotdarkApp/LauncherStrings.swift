@@ -1,7 +1,7 @@
 import Foundation
 
 enum LauncherStrings {
-    static let searchPlaceholder = "Search"
+    static let searchPlaceholder = "Search for apps or documents..."
     static let searchFieldAccessibilityLabel = "Search"
     static let searchFieldAccessibilityHint = "Type to search apps, files, and commands. Use the arrow keys to move through results, Return to confirm, and Escape to close."
     static let launcherShortcutAccessibilityLabelTemplate = "Launcher shortcut %@"

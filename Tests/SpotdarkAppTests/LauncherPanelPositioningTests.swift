@@ -2,6 +2,29 @@ import XCTest
 @testable import SpotdarkApp
 
 final class LauncherPanelPositioningTests: XCTestCase {
+    func testCompactOriginPlacesPanelAboveVisibleCenter() {
+        let origin = LauncherPanelPositioning.compactOrigin(
+            panelSize: CGSize(width: 640, height: 64),
+            screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 860),
+            verticalOffsetRatio: 0.12,
+            maximumVerticalOffset: 110
+        )
+
+        XCTAssertEqual(origin.x, 400)
+        XCTAssertEqual(origin.y, 501)
+    }
+
+    func testOriginKeepingTopEdgeExpandsPanelDownward() {
+        let origin = LauncherPanelPositioning.originKeepingTopEdge(
+            currentFrame: CGRect(x: 400, y: 501, width: 640, height: 64),
+            newHeight: 340
+        )
+
+        XCTAssertEqual(origin.x, 400)
+        XCTAssertEqual(origin.y, 225)
+    }
+
     func testRestoredOriginReturnsSavedPositionWhenFrameFitsVisibleScreen() {
         let origin = LauncherPanelPositioning.restoredOrigin(
             from: ["x": 220.0, "top": 760.0],

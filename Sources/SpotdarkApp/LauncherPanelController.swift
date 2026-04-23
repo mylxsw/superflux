@@ -112,6 +112,7 @@ final class LauncherPanelController: NSObject {
         panel.alphaValue = panel.isVisible ? panel.alphaValue : 0
         panel.setFrame(initialFrame, display: false)
         panel.makeKeyAndOrderFront(nil)
+        store.requestFocus()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = LauncherPanelMetrics.panelPresentationDuration
@@ -131,12 +132,15 @@ final class LauncherPanelController: NSObject {
 
     private func centerOnScreen() {
         guard let screen = NSScreen.main else { return }
-        // Use screen.frame for horizontal center so a side Dock doesn't shift midX.
-        // Use visibleFrame for vertical center so the panel stays above a bottom Dock.
-        let x = round(screen.frame.midX - panel.frame.width / 2)
-        let y = round(screen.visibleFrame.midY - panel.frame.height / 2)
+        let origin = LauncherPanelPositioning.compactOrigin(
+            panelSize: panel.frame.size,
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            verticalOffsetRatio: LauncherPanelMetrics.compactVerticalOffsetRatio,
+            maximumVerticalOffset: LauncherPanelMetrics.compactVerticalOffsetMaximum
+        )
         withSuppressedFramePersistence {
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            panel.setFrameOrigin(origin)
         }
     }
 
@@ -184,16 +188,14 @@ final class LauncherPanelController: NSObject {
         let currentFrame = panel.frame
         guard abs(currentFrame.height - height) > 0.5 else { return }
 
-        let originY: CGFloat
-        if SettingsStore.shared.remembersPanelPosition {
-            originY = currentFrame.maxY - height
-        } else {
-            originY = currentFrame.midY - (height / 2)
-        }
+        let origin = LauncherPanelPositioning.originKeepingTopEdge(
+            currentFrame: currentFrame,
+            newHeight: height
+        )
 
         let newFrame = NSRect(
-            x: round(currentFrame.origin.x),
-            y: round(originY),
+            x: origin.x,
+            y: origin.y,
             width: LauncherPanelMetrics.width,
             height: height
         ).integral

@@ -43,7 +43,7 @@ final class LauncherStore {
     }
 
     var isShowingRecentItems: Bool {
-        liveTrimmedQuery.isEmpty && !recentItems.isEmpty
+        false
     }
 
     var isShowingNoResultsState: Bool {
@@ -51,7 +51,7 @@ final class LauncherStore {
     }
 
     var isShowingExpandedContent: Bool {
-        !liveTrimmedQuery.isEmpty || isShowingRecentItems
+        !liveTrimmedQuery.isEmpty
     }
 
     var preferredPanelHeight: CGFloat {
@@ -59,7 +59,7 @@ final class LauncherStore {
     }
 
     var displayedItems: [SearchItem] {
-        isShowingRecentItems ? recentItems : results
+        results
     }
 
     var displayedSections: [LauncherItemSection] {

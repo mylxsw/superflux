@@ -3,6 +3,7 @@ import SwiftUI
 
 final class LauncherSearchFieldContainerView: NSView {
     let textField: NSTextField
+    private var shouldFocusWhenAttached = false
 
     override init(frame frameRect: NSRect) {
         textField = NSTextField()
@@ -17,8 +18,24 @@ final class LauncherSearchFieldContainerView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(textField)
+        focusTextField()
         super.mouseDown(with: event)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard shouldFocusWhenAttached else { return }
+        focusTextField()
+    }
+
+    func focusTextField() {
+        guard let window else {
+            shouldFocusWhenAttached = true
+            return
+        }
+
+        shouldFocusWhenAttached = false
+        window.makeFirstResponder(textField)
     }
 
     private func configure() {
@@ -36,14 +53,14 @@ final class LauncherSearchFieldContainerView: NSView {
         textField.maximumNumberOfLines = 1
         textField.alignment = .left
         textField.cell?.usesSingleLineMode = true
-        textField.font = .systemFont(ofSize: 22, weight: .medium)
+        textField.font = .systemFont(ofSize: 18, weight: .medium)
 
         addSubview(textField)
         NSLayoutConstraint.activate([
             textField.leadingAnchor.constraint(equalTo: leadingAnchor),
             textField.trailingAnchor.constraint(equalTo: trailingAnchor),
             textField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            textField.heightAnchor.constraint(equalToConstant: 28)
+            textField.heightAnchor.constraint(equalToConstant: 24)
         ])
     }
 }
@@ -79,21 +96,19 @@ struct LauncherSearchField: NSViewRepresentable {
             textField.stringValue = text
         }
 
-        textField.font = .systemFont(ofSize: 22, weight: .medium)
+        textField.font = .systemFont(ofSize: 18, weight: .medium)
         textField.textColor = textColor
         textField.placeholderAttributedString = NSAttributedString(
             string: placeholder,
             attributes: [
                 .foregroundColor: placeholderColor,
-                .font: NSFont.systemFont(ofSize: 22, weight: .medium)
+                .font: NSFont.systemFont(ofSize: 18, weight: .medium)
             ]
         )
 
         if context.coordinator.lastFocusRequestID != focusRequestID {
             context.coordinator.lastFocusRequestID = focusRequestID
-            DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(textField)
-            }
+            nsView.focusTextField()
         }
     }
 

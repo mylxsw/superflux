@@ -4,34 +4,18 @@ import SpotdarkCore
 
 struct LauncherRootView: View {
     @Bindable var store: LauncherStore
-    @ObservedObject private var settingsStore = SettingsStore.shared
-
-    private var theme: LauncherThemePalette {
-        settingsStore.selectedThemePreset.theme
-    }
 
     var body: some View {
         ZStack {
             panelBackground
 
-            VStack(spacing: 0) {
-                searchBar
-                Rectangle()
-                    .fill(theme.dividerColor)
-                    .frame(height: 1)
-
-                bodyContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                LauncherStatusFooterView(isIndexing: store.isInitialIndexing)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            panelContent
         }
         .frame(width: LauncherPanelMetrics.width)
         .frame(maxHeight: .infinity, alignment: .top)
         .compositingGroup()
         .clipShape(RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous))
-        .tint(theme.accentColor)
+        .tint(LauncherGlassStyle.accent)
         // Global keyboard behavior:
         // - Up/Down: navigate results
         // - Return: open selected item
@@ -53,41 +37,41 @@ struct LauncherRootView: View {
     }
 
     private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [theme.panelBackgroundTop, theme.panelBackgroundBottom],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [theme.panelTintTop, theme.panelTintBottom],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: LauncherPanelMetrics.cornerRadius, style: .continuous)
-                    .strokeBorder(theme.panelStrokeColor, lineWidth: 0.75)
-            )
+        LauncherGlassBackground(cornerRadius: LauncherPanelMetrics.cornerRadius)
+    }
+
+    @ViewBuilder
+    private var panelContent: some View {
+        if store.isShowingExpandedContent {
+            VStack(spacing: 0) {
+                searchBar
+
+                Rectangle()
+                    .fill(LauncherGlassStyle.divider)
+                    .frame(height: 1)
+
+                bodyContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        } else {
+            searchBar
+                .frame(maxWidth: .infinity)
+                .frame(maxHeight: .infinity, alignment: .center)
+        }
     }
 
     private var searchBar: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(theme.searchPlaceholderColor)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(LauncherGlassStyle.searchPlaceholder)
 
             LauncherSearchField(
                 text: $store.query,
                 placeholder: LauncherStrings.searchPlaceholder,
-                textColor: NSColor(theme.searchTextColor),
-                placeholderColor: NSColor(theme.searchPlaceholderColor),
+                textColor: NSColor(LauncherGlassStyle.searchText),
+                placeholderColor: NSColor(LauncherGlassStyle.searchPlaceholder),
                 focusRequestID: store.focusRequestID,
                 onMoveSelection: { delta in
                     store.moveSelection(delta: delta)
@@ -100,7 +84,7 @@ struct LauncherRootView: View {
                 }
             )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 30)
+            .frame(height: 26)
 
             LauncherShortcutHintView(settingsStore: SettingsStore.shared)
         }
@@ -124,22 +108,8 @@ struct LauncherRootView: View {
 
     private var resultsList: some View {
         Group {
-            if store.isShowingRecentItems {
-                LauncherItemListView(
-                    sections: store.displayedSections,
-                    query: store.trimmedQuery,
-                    selectedIndex: store.selectedIndex,
-                    onSelect: { index in
-                        store.select(index: index)
-                    },
-                    onActivate: { _ in
-                        store.performSelectedAction()
-                    }
-                )
-                .transition(.opacity)
-            } else if store.isInitialIndexing {
-                LauncherLoadingStateView()
-                    .transition(.opacity)
+            if store.isInitialIndexing {
+                expandedFallback(content: AnyView(LauncherLoadingStateView()))
             } else if store.isShowingResults {
                 LauncherItemListView(
                     sections: store.displayedSections,
@@ -154,16 +124,19 @@ struct LauncherRootView: View {
                 )
                 .transition(.opacity)
             } else if store.isShowingNoResultsState {
-                LauncherEmptyStateView(
-                    systemImage: "exclamationmark.magnifyingglass",
-                    title: LauncherStrings.noResultsTitle,
-                    message: String(
-                        format: LauncherStrings.noResultsMessageTemplate,
-                        store.query.trimmingCharacters(in: .whitespacesAndNewlines)
-                    ),
-                    hint: LauncherStrings.noResultsHint
+                expandedFallback(
+                    content: AnyView(
+                        LauncherEmptyStateView(
+                            systemImage: "exclamationmark.magnifyingglass",
+                            title: LauncherStrings.noResultsTitle,
+                            message: String(
+                                format: LauncherStrings.noResultsMessageTemplate,
+                                store.query.trimmingCharacters(in: .whitespacesAndNewlines)
+                            ),
+                            hint: LauncherStrings.noResultsHint
+                        )
+                    )
                 )
-                .transition(.opacity)
             } else {
                 Color.clear
             }
@@ -171,8 +144,16 @@ struct LauncherRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.snappy(duration: LauncherPanelMetrics.expandedContentAnimationDuration, extraBounce: 0), value: store.isInitialIndexing)
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingResults)
-        .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingRecentItems)
         .animation(.snappy(duration: LauncherPanelMetrics.contentSwapAnimationDuration, extraBounce: 0), value: store.isShowingNoResultsState)
+    }
+
+    private func expandedFallback(content: AnyView) -> some View {
+        VStack {
+            Spacer(minLength: 0)
+            content
+            Spacer(minLength: 0)
+        }
+        .padding(18)
     }
 
     @ViewBuilder
@@ -187,7 +168,6 @@ struct LauncherRootView: View {
                 )
         } else {
             Color.clear
-                .frame(height: LauncherPanelMetrics.collapsedBodyHeight)
                 .allowsHitTesting(false)
         }
     }

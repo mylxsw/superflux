@@ -2,6 +2,31 @@ import CoreGraphics
 import Foundation
 
 enum LauncherPanelPositioning {
+    static func compactOrigin(
+        panelSize: CGSize,
+        screenFrame: CGRect,
+        visibleFrame: CGRect,
+        verticalOffsetRatio: CGFloat,
+        maximumVerticalOffset: CGFloat
+    ) -> CGPoint {
+        let verticalOffset = min(visibleFrame.height * verticalOffsetRatio, maximumVerticalOffset)
+        let center = CGPoint(
+            x: screenFrame.midX,
+            y: visibleFrame.midY + verticalOffset
+        )
+        return CGPoint(
+            x: round(center.x - panelSize.width / 2),
+            y: round(center.y - panelSize.height / 2)
+        )
+    }
+
+    static func originKeepingTopEdge(currentFrame: CGRect, newHeight: CGFloat) -> CGPoint {
+        CGPoint(
+            x: round(currentFrame.origin.x),
+            y: round(currentFrame.maxY - newHeight)
+        )
+    }
+
     static func restoredOrigin(
         from persistedFrame: [String: Any],
         panelSize: CGSize,

@@ -4,7 +4,7 @@ import SpotdarkCore
 
 @MainActor
 final class LauncherStoreRecentItemsTests: XCTestCase {
-    func testEmptyQueryShowsRecentItems() async throws {
+    func testEmptyQueryKeepsPanelCollapsedEvenWithRecentItemsAvailable() async throws {
         let store = LauncherStore(
             commandProvider: CommandRegistry(),
             indexStream: StubAppIndexStream(
@@ -27,14 +27,16 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
         )
 
         try await waitUntil {
-            store.isShowingRecentItems && store.displayedItems.count == 1
+            !store.isInitialIndexing
         }
 
-        XCTAssertEqual(store.displayedItems.count, 1)
-        XCTAssertEqual(store.selectedIndex, 0)
+        XCTAssertFalse(store.isShowingRecentItems)
+        XCTAssertFalse(store.isShowingExpandedContent)
+        XCTAssertTrue(store.displayedItems.isEmpty)
+        XCTAssertEqual(store.preferredPanelHeight, LauncherPanelMetrics.collapsedHeight)
     }
 
-    func testTypingQueryHidesRecentItemsAndShowsSearchResults() async throws {
+    func testTypingQueryShowsSearchResultsFromCollapsedState() async throws {
         let store = LauncherStore(
             commandProvider: CommandRegistry(),
             indexStream: StubAppIndexStream(
@@ -58,7 +60,7 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
         )
 
         try await waitUntil {
-            store.isShowingRecentItems && store.displayedItems.count == 1
+            !store.isInitialIndexing
         }
 
         store.query = "text"
@@ -70,7 +72,48 @@ final class LauncherStoreRecentItemsTests: XCTestCase {
         }
 
         XCTAssertFalse(store.isShowingRecentItems)
+        XCTAssertTrue(store.isShowingExpandedContent)
         XCTAssertEqual(store.displayedItems.count, 1)
+    }
+
+    func testClearingQueryWithoutRecentItemsCollapsesPanel() async throws {
+        let store = LauncherStore(
+            commandProvider: CommandRegistry(),
+            indexStream: StubAppIndexStream(
+                items: [
+                    .initial([
+                        IndexedApplication(bundleURL: URL(fileURLWithPath: "/Applications/Notes.app"))
+                    ])
+                ]
+            ),
+            fileSearchProvider: EmptyFileSearchProvider(),
+            recentItemsProvider: { _ in [] }
+        )
+
+        try await waitUntil {
+            !store.isInitialIndexing
+        }
+
+        XCTAssertEqual(store.preferredPanelHeight, LauncherPanelMetrics.collapsedHeight)
+        XCTAssertFalse(store.isShowingExpandedContent)
+
+        store.query = "note"
+
+        try await waitUntil {
+            store.isShowingResults && store.preferredPanelHeight == LauncherPanelMetrics.expandedHeight
+        }
+
+        XCTAssertEqual(store.preferredPanelHeight, LauncherPanelMetrics.expandedHeight)
+
+        store.query = ""
+
+        try await waitUntil {
+            !store.isShowingExpandedContent
+                && store.preferredPanelHeight == LauncherPanelMetrics.collapsedHeight
+        }
+
+        XCTAssertEqual(store.preferredPanelHeight, LauncherPanelMetrics.collapsedHeight)
+        XCTAssertFalse(store.isShowingExpandedContent)
     }
 }
 

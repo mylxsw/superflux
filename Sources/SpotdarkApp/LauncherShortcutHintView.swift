@@ -8,25 +8,21 @@ struct LauncherShortcutHintView: View {
         _settingsStore = ObservedObject(wrappedValue: settingsStore)
     }
 
-    private var theme: LauncherThemePalette {
-        settingsStore.selectedThemePreset.theme
-    }
-
     var body: some View {
         HStack(spacing: 8) {
             ForEach(Array(shortcutTokens.enumerated()), id: \.offset) { _, token in
                 Text(token)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(theme.secondaryTextColor)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LauncherGlassStyle.secondary)
                     .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(theme.capsuleFillColor)
+                            .fill(LauncherGlassStyle.capsuleFill)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .strokeBorder(theme.capsuleStrokeColor, lineWidth: 1)
+                                    .strokeBorder(LauncherGlassStyle.capsuleStroke, lineWidth: 1)
                             )
                     )
             }
