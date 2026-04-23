@@ -13,7 +13,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let w = NSWindow(contentViewController: hosting)
         w.title = "Settings"
         w.styleMask = [.titled, .closable, .miniaturizable]
-        w.setContentSize(NSSize(width: 720, height: 520))
+        w.setContentSize(NSSize(width: 820, height: 560))
         w.center()
         w.delegate = self
         return w

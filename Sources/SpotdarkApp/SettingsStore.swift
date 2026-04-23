@@ -571,13 +571,13 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general:
-            SettingsStrings.generalTabTitle
+            "Appearance"
         case .shortcuts:
-            SettingsStrings.shortcutsTabTitle
+            "Shortcuts"
         case .search:
-            SettingsStrings.searchTabTitle
+            "Search Scope"
         case .about:
-            SettingsStrings.aboutTabTitle
+            "Advanced"
         }
     }
 
