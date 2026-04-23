@@ -80,6 +80,28 @@ final class LauncherItemSectionBuilderTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.map(\.index), [0, 1, 2, 3, 4])
     }
 
+    func testVisualRowOrderFollowsSectionOrder() {
+        let app = SearchItem.application(
+            AppItem(name: "Notes", bundleIdentifier: nil, bundleURL: URL(fileURLWithPath: "/Applications/Notes.app"))
+        )
+        let file = SearchItem.file(
+            FileItem(name: "notes.txt", path: URL(fileURLWithPath: "/Users/demo/notes.txt"), contentType: nil, modificationDate: nil)
+        )
+        let command = SearchItem.command(CommandItem(id: "open-settings", title: "Open Settings", keywords: []))
+
+        // Items are interleaved: command(0), app(1), file(2), app(3), command(4)
+        // Sections produce: applications [1,3], files [2], commands [0,4]
+        // Expected visual order: 1, 3, 2, 0, 4 (apps first, then files, then commands)
+        let sections = LauncherItemSectionBuilder.makeSections(
+            items: [command, app, file, app, command],
+            isShowingRecentItems: false,
+            minimumGroupedItemCount: 5
+        )
+
+        let visualOrder = sections.flatMap(\.rows).map(\.index)
+        XCTAssertEqual(visualOrder, [1, 3, 2, 0, 4])
+    }
+
     func testRecentItemsAlwaysUseRecentSection() {
         let sections = LauncherItemSectionBuilder.makeSections(
             items: [

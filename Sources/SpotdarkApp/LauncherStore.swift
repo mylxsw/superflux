@@ -126,7 +126,18 @@ final class LauncherStore {
             selectedIndex = 0
             return
         }
-        select(index: selectedIndex + delta)
+
+        // Navigate in visual (section) order so that up/down moves through items
+        // top-to-bottom as rendered, not by raw flat-array position.
+        let orderedRows = displayedSections.flatMap(\.rows)
+        guard !orderedRows.isEmpty else {
+            selectedIndex = 0
+            return
+        }
+
+        let currentVisualIndex = orderedRows.firstIndex(where: { $0.index == selectedIndex }) ?? 0
+        let newVisualIndex = min(max(currentVisualIndex + delta, 0), orderedRows.count - 1)
+        selectedIndex = orderedRows[newVisualIndex].index
     }
 
     func performSelectedAction() {
