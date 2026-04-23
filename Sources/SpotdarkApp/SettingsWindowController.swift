@@ -11,7 +11,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private func makeWindow() -> NSWindow {
         let hosting = NSHostingController(rootView: SettingsView(store: SettingsStore.shared))
         let w = NSWindow(contentViewController: hosting)
-        w.title = "Settings"
+        w.title = ""
+        w.titleVisibility = .hidden
+        w.titlebarSeparatorStyle = .none
         w.styleMask = [.titled, .closable, .miniaturizable]
         w.setContentSize(NSSize(width: 820, height: 520))
         w.center()
