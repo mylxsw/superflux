@@ -40,13 +40,6 @@ struct SettingsView: View {
 
 private struct SDSidebar: View {
     @Binding var selectedPane: SettingsPane
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var sidebarBackground: Color {
-        colorScheme == .dark
-            ? Color(red: 0.13, green: 0.13, blue: 0.15)   // #212225 — darker than card
-            : Color(red: 0.90, green: 0.90, blue: 0.92)   // #E6E6EB — gray vs white card
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -97,7 +90,7 @@ private struct SDSidebar: View {
             Spacer(minLength: 0)
         }
         .frame(width: 180)
-        .background(sidebarBackground)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 
